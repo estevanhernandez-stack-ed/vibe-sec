@@ -1,20 +1,20 @@
 {
   "name": "@esthernandez/vibe-sec",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Security gap finder for vibe-coded apps — leaked secrets, sketchy auth, missing input validation, stale dependencies. Coming soon as a Claude Code plugin.",
   "license": "MIT",
   "author": {
     "name": "Estevan Hernandez",
     "url": "https://626labs.dev"
   },
-  "homepage": "https://626labs.dev#vibe-sec",
+  "homepage": "https://github.com/estevanhernandez-stack-ed/vibe-sec#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/estevanhernandez-stack-ed/vibe-plugins.git",
+    "url": "git+https://github.com/estevanhernandez-stack-ed/vibe-sec.git",
     "directory": "packages/vibe-sec"
   },
   "bugs": {
-    "url": "https://github.com/estevanhernandez-stack-ed/vibe-plugins/issues"
+    "url": "https://github.com/estevanhernandez-stack-ed/vibe-sec/issues"
   },
   "keywords": [
     "claude-code",
