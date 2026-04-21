@@ -1,0 +1,26 @@
+{
+  "name": "vibe-sec-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Vibe Sec — security gap finder for vibe-coded apps. This repo is the canary / edge-release channel; for stable releases install via the 626Labs marketplace at github.com/estevanhernandez-stack-ed/vibe-plugins.",
+  "author": "626Labs LLC",
+  "license": "MIT",
+  "homepage": "https://github.com/estevanhernandez-stack-ed/vibe-sec#readme",
+  "bugs": "https://github.com/estevanhernandez-stack-ed/vibe-sec/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/estevanhernandez-stack-ed/vibe-sec.git"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "pnpm -r --filter=./packages/* test",
+    "clean": "pnpm -r --filter=./packages/* clean"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.9"
+}

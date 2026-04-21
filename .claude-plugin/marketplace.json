@@ -1,0 +1,14 @@
+{
+  "name": "vibe-sec",
+  "owner": {
+    "name": "626Labs LLC"
+  },
+  "description": "Vibe Sec — canary channel. Tracks the main branch of the solo repo. For stable releases pinned to tagged versions, install via the aggregated 626Labs marketplace at github.com/estevanhernandez-stack-ed/vibe-plugins.",
+  "plugins": [
+    {
+      "name": "vibe-sec",
+      "description": "Security gap finder for vibe-coded apps — leaked secrets, sketchy auth, missing input validation, stale dependencies. Full plugin coming soon; secret-leak scanner CLI available now via @esthernandez/vibe-sec-cli.",
+      "source": "./packages/vibe-sec"
+    }
+  ]
+}
