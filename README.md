@@ -1,3 +1,7 @@
+<p align="center">
+  <img alt="Vibe Sec — security gap finder for vibe-coded apps" src="https://626labs.dev/assets/brand/plugins/vibe-sec-banner-1500x500.png" />
+</p>
+
 # Vibe Sec
 
 > Security gap finder for vibe-coded apps — leaked secrets, sketchy auth, missing input validation, stale dependencies.
