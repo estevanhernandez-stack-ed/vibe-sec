@@ -43,6 +43,8 @@ import {
   resetFindingIds,
   secretToFinding,
   depToFinding,
+  depNotCheckedToFinding,
+  depCoverageAdvisory,
   pinningToFinding,
   typosquatToFinding,
   actionsToFinding,
@@ -73,6 +75,7 @@ import {
   weightedScore,
   evaluateGate,
   foldConcernResults,
+  dedupeByLocation,
   type Finding,
   type Concern,
 } from "../packages/vibe-sec/dist/index.js";
@@ -242,6 +245,11 @@ for (const r of pkgRoots) {
     const res = scanDependencies(r, { probe: noTools });
     let n = 0;
     for (const d of res.findings) if (pushUnique(depToFinding(d, tier))) n++;
+    // No data source reached (no osv-scanner, no fetcher, no npm audit) and no
+    // findings → surface a coverage advisory so a clean 1.0 isn't false comfort.
+    if (res.notChecked && res.findings.length === 0) {
+      if (pushUnique(depNotCheckedToFinding(depCoverageAdvisory(), tier))) n++;
+    }
     bump("dependency-cve", n);
   });
 
@@ -278,6 +286,17 @@ for (const r of pkgRoots) {
     bump("rate-limiting", n);
   });
 }
+
+// ─── Path-normalize + de-dupe (multi-root collapse) ─────────────────────────
+// In a multi-package repo with no root package.json, manifest-rooted detectors
+// run once per sub-root, so the same physical file surfaces under different
+// relative prefixes (functions/src/games/quiz.js vs src/games/quiz.js) with
+// different finding ids — id-dedup misses them. dedupeByLocation collapses by
+// canonical location + concern + finding_type so a file scanned via multiple
+// roots yields one finding (WSYATM dogfood §5 fix). Run BEFORE scoring/banding.
+const dedupedFindings = dedupeByLocation(findings);
+findings.length = 0;
+findings.push(...dedupedFindings);
 
 // ─── Score, gate, four-band report ──────────────────────────────────────────
 // Fold findings into per-concern results the same way run-gate does over cached
