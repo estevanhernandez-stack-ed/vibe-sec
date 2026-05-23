@@ -82,6 +82,86 @@ describe("LLM endpoint detection", () => {
     expect(detectLlmSdk(`import { Anthropic } from "@anthropic-ai/sdk";`)).toBe("@anthropic-ai/sdk");
     expect(detectLlmSdk(`const r = require("groq-sdk");`)).toBe("groq-sdk");
   });
+
+  // ─── Regression: handler-scoped auth (WSYATM quiz.js vs leaderboards.js) ──
+  // The load-bearing fix. A Firebase functions file imports verifyAuthToken at
+  // the top and uses it in SOME handlers but not others. Whole-file auth checks
+  // would (a) falsely mark the unauthed generateQuiz handler as authed (killing
+  // the real catch), or (b) inflate the auth-gated generateBadgeIcon to
+  // unauthenticated-critical. Auth must be scoped to the handler the model call
+  // sits inside.
+  describe("handler-scoped auth (regression)", () => {
+    // Mirrors WSYATM functions/src/games/quiz.js: imports verifyAuthToken, used
+    // in OTHER handlers, but generateQuiz (the Gemini handler) has NO auth.
+    const quizFile = `
+const {onRequest} = require("firebase-functions/v2/https");
+const {GoogleGenerativeAI} = require("@google/generative-ai");
+const { db, geminiApiKey, verifyAuthToken, checkAdminRole } = require("../utils/helpers");
+
+const generateQuiz = onRequest(
+    {cors: true, timeoutSeconds: 120},
+    async (req, res) => {
+      if (req.method !== "POST") {
+        return res.status(405).json({error: "Method not allowed"});
+      }
+      const {movieTitle} = req.body;
+      const genAI = new GoogleGenerativeAI(geminiApiKey.value());
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const result = await model.generateContent(prompt);
+      return res.json(result.response.text());
+    });
+
+const getMyQuizHistory = onRequest({cors: true}, async (req, res) => {
+  const decodedToken = await verifyAuthToken(req);
+  const uid = decodedToken.uid;
+  return res.json({ history: [] });
+});
+
+module.exports = { generateQuiz, getMyQuizHistory };
+`;
+
+    it("KEEPS flagging the unauthenticated Gemini handler even though the file imports verifyAuthToken", () => {
+      const findings = scanLlmEndpoint(quizFile, "functions/src/games/quiz.js");
+      expect(findings.length).toBe(1);
+      expect(findings[0]!.finding_type).toBe("llm-endpoint-unauthenticated");
+      expect(findings[0]!.hasAuth).toBe(false);
+    });
+
+    // Mirrors WSYATM functions/src/social/leaderboards.js generateBadgeIcon:
+    // auth + admin-gated in the SAME handler, but no per-user budget (the rate
+    // limiting is commented out). Should be unbounded (tier-gated), NOT
+    // unauthenticated-critical.
+    const badgeFile = `
+const {onRequest} = require("firebase-functions/v2/https");
+const {GoogleGenerativeAI} = require("@google/generative-ai");
+const { geminiApiKey, verifyAuthToken, checkAdminRole } = require("../utils/helpers");
+
+const generateBadgeIcon = onRequest(
+    {cors: true, memory: "1GiB"},
+    async (req, res) => {
+      const decodedToken = await verifyAuthToken(req);
+      const uid = decodedToken.uid;
+      await checkAdminRole(uid);
+      const {badgeId, prompt} = req.body;
+      // SERVER-SIDE RATE LIMITING - DISABLED FOR TESTING
+      const genAI = new GoogleGenerativeAI(geminiApiKey.value());
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-image" });
+      const generatePromise = model.generateContent({ contents: [] });
+      return res.json({ ok: true });
+    });
+
+module.exports = { generateBadgeIcon };
+`;
+
+    it("downgrades the auth+admin-gated badge handler to unbounded, NOT unauthenticated", () => {
+      const findings = scanLlmEndpoint(badgeFile, "functions/src/social/leaderboards.js");
+      expect(findings.length).toBe(1);
+      expect(findings[0]!.finding_type).toBe("llm-endpoint-unbounded");
+      expect(findings[0]!.hasAuth).toBe(true);
+      // public-facing: unbounded → high (not the every-tier critical).
+      expect(llmEndpointToFinding(findings[0]!, "public-facing").severity_tier_adjusted).toBe("high");
+    });
+  });
 });
 
 // ─── middleware inspection ─────────────────────────────────────────────────

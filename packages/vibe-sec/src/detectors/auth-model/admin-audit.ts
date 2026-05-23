@@ -24,8 +24,14 @@ export interface AdminFinding {
   detail: string;
 }
 
+// A role gate is any of: a role compared (== or !=, allow-or-reject) against an
+// "admin"/"manager" literal, a role helper (isAdmin / hasRole / checkAdminRole /
+// requireRole / @Roles), a `<obj>.role` access compared to a string, a role
+// field read (user.role / session.user.role / data.role), or roles.includes.
+// Recognizing the REJECT form (`role !== 'admin'`) matters: hand-rolled Firebase
+// admin servers commonly gate by rejecting non-admins (WSYATM dogfood).
 const ROLE_GATE_RE =
-  /\b(?:role\s*===?\s*["'`]admin["'`]|["'`]admin["'`]\s*===?\s*\w*role|isAdmin\b|hasRole\s*\(|requireRole\s*\(|checkRole\s*\(|@Roles\s*\(|\.role\s*===|user\.role|session\.user\.role|roles?\.includes\s*\(\s*["'`]admin)/i;
+  /\b(?:role\s*[!=]==?\s*["'`](?:admin|manager)["'`]|["'`](?:admin|manager)["'`]\s*[!=]==?\s*\w*role|isAdmin\b|hasRole\s*\(|requireRole\s*\(|checkRole\s*\(|checkAdminRole\s*\(|checkManagerRole\s*\(|@Roles\s*\(|\w*\.role\s*[!=]==?|user\.role|session\.user\.role|\w*[Dd]ata\.role|roles?\.includes\s*\(\s*["'`](?:admin|manager))/i;
 
 /**
  * Audit the admin routes in an inventory against the source text of their files.

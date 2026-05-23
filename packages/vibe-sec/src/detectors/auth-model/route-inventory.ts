@@ -45,8 +45,14 @@ export interface Route {
 }
 
 // Auth-enforcement markers we look for in/around a handler.
+//
+// Includes Firebase's canonical patterns (verifyAuthToken / verifyIdToken,
+// getAuth().verifyIdToken, admin.auth(), getAuth(), checkAdminRole) plus inline
+// Express Bearer-token extraction — these are *the* auth shape across Firebase
+// Functions and hand-rolled Express admin servers, and missing them was the
+// dominant false-positive driver (WSYATM dogfood, 2026-05-23).
 const AUTH_MARKER_RE =
-  /\b(?:auth\s*\(|getServerSession\s*\(|getUser\s*\(|requireAuth|requireUser|requireSession|ensureAuthenticated|isAuthenticated|currentUser\s*\(|getToken\s*\(|verifyToken|authMiddleware|withAuth|protect\b|clerkClient|@UseGuards)/;
+  /\b(?:auth\s*\(|getServerSession\s*\(|getUser\s*\(|requireAuth|requireUser|requireSession|ensureAuthenticated|isAuthenticated|currentUser\s*\(|getToken\s*\(|verifyToken|verifyAuthToken|verifyIdToken|checkAdminRole|checkManagerRole|verifyFirebaseToken|getAuth\s*\(|admin\.auth\s*\(|authMiddleware|withAuth|protect\b|clerkClient|@UseGuards|authorization|authHeader|Bearer\s)|(?:["'`]Bearer\s)/;
 const ADMIN_RE = /\badmin\b/i;
 
 // ─── Next.js App Router route handlers (app/**/route.ts) ──────────────────
@@ -60,7 +66,13 @@ const EXPRESS_ROUTE_RE =
   /\b(?:app|router|server|fastify|api)\s*\.\s*(get|post|put|patch|delete|all|options|head)\s*\(\s*(["'`])([^"'`]+)\2/g;
 
 // ─── Firebase Functions ───────────────────────────────────────────────────
+// v1 namespaced form (functions.https.onRequest) and the v2 destructured bare
+// form (`const fn = onRequest(` after `require("firebase-functions/v2/https")`).
+// The bare form is gated on a firebase-functions import to avoid matching an
+// unrelated `onRequest(` in non-Firebase code (WSYATM uses the v2 bare style).
 const FIREBASE_FN_RE = /\b(?:functions\.https\.|https\.)(onRequest|onCall)\s*\(/g;
+const FIREBASE_FN_BARE_RE = /\b(onRequest|onCall)\s*\(/g;
+const FIREBASE_IMPORT_RE = /firebase-functions/;
 
 // ─── tRPC procedures ──────────────────────────────────────────────────────
 const TRPC_PROC_RE = /\b(\w+)\s*:\s*(publicProcedure|protectedProcedure|authedProcedure|adminProcedure)\b/g;
@@ -152,34 +164,58 @@ export function scanRoutes(text: string, filePath: string): Route[] {
   }
 
   // Express / Fastify / Hono.
+  // Collect every route-declaration offset first so the auth-detection window for
+  // one route can extend to the START of the next route (or end-of-file) — the
+  // inline Bearer/verifyIdToken check often sits well past the old fixed 400-char
+  // window (WSYATM admin routes put the role gate ~25 lines into the handler body).
   EXPRESS_ROUTE_RE.lastIndex = 0;
-  for (const m of text.matchAll(EXPRESS_ROUTE_RE)) {
+  const expressMatches = [...text.matchAll(EXPRESS_ROUTE_RE)];
+  // Hard cap so a single huge handler at end-of-file doesn't swallow the rest of
+  // a monolith and over-attribute auth to a later, unrelated route.
+  const MAX_HANDLER_WINDOW = 4000;
+  for (let i = 0; i < expressMatches.length; i++) {
+    const m = expressMatches[i]!;
     const routePath = m[3] ?? "/";
-    // Auth status from the handler args span (auth middleware listed inline?).
-    const after = text.slice(m.index ?? 0, (m.index ?? 0) + 400);
+    const start = m.index ?? 0;
+    const nextStart = i + 1 < expressMatches.length ? (expressMatches[i + 1]!.index ?? text.length) : text.length;
+    // Window = up to the next route declaration, capped — this is the handler body.
+    const windowEnd = Math.min(nextStart, start + MAX_HANDLER_WINDOW);
+    const handlerBody = text.slice(start, windowEnd);
     routes.push({
       path: routePath,
       method: (m[1] ?? "get").toUpperCase(),
       framework: /\bfastify\b/.test(text) ? "fastify" : /\bhono\b/i.test(text) ? "hono" : "express",
       file: filePath,
-      line: lineOf(text, m.index ?? 0),
-      authStatus: AUTH_MARKER_RE.test(after) ? "enforced" : "unknown",
+      line: lineOf(text, start),
+      authStatus: AUTH_MARKER_RE.test(handlerBody) ? "enforced" : "unknown",
       isAdmin: ADMIN_RE.test(routePath),
     });
   }
 
-  // Firebase Functions.
-  FIREBASE_FN_RE.lastIndex = 0;
-  for (const m of text.matchAll(FIREBASE_FN_RE)) {
+  // Firebase Functions. Match the v1 namespaced form; additionally match the v2
+  // bare `onRequest(`/`onCall(` when the file imports firebase-functions. Auth is
+  // scoped to the handler body (window to the next Firebase declaration) so a
+  // file that imports verifyAuthToken for SOME handlers doesn't mark an unauthed
+  // sibling handler as enforced (the quiz.js / generateQuiz shape).
+  const usesFirebase = FIREBASE_IMPORT_RE.test(text);
+  const fbRe = usesFirebase ? FIREBASE_FN_BARE_RE : FIREBASE_FN_RE;
+  fbRe.lastIndex = 0;
+  const fbMatches = [...text.matchAll(fbRe)];
+  for (let fi = 0; fi < fbMatches.length; fi++) {
+    const m = fbMatches[fi]!;
     const kind = m[1] ?? "onRequest";
+    const start = m.index ?? 0;
+    const nextStart = fi + 1 < fbMatches.length ? (fbMatches[fi + 1]!.index ?? text.length) : text.length;
+    const handlerBody = text.slice(start, Math.min(nextStart, start + 4000));
     routes.push({
       path: filePath,
       method: kind === "onCall" ? "CALL" : "REQUEST",
       framework: "firebase-functions",
       file: filePath,
-      line: lineOf(text, m.index ?? 0),
-      // onCall gets auth context for free; onRequest is raw and needs explicit checks.
-      authStatus: kind === "onCall" ? "enforced" : authStatusFor(text),
+      line: lineOf(text, start),
+      // onCall gets auth context for free; onRequest is raw and needs explicit
+      // checks — scope the marker test to this handler's body.
+      authStatus: kind === "onCall" ? "enforced" : (AUTH_MARKER_RE.test(handlerBody) ? "enforced" : "unknown"),
       isAdmin: ADMIN_RE.test(filePath),
     });
   }

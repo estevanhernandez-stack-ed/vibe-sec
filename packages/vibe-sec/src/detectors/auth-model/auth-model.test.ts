@@ -87,6 +87,125 @@ describe("admin audit", () => {
   });
 });
 
+// ─── Regression: Firebase / inline-Bearer auth recognition (WSYATM dogfood) ──
+// The dominant FP driver: Express admin routes with an INLINE Bearer-token check
+// + auth.verifyIdToken were flagged "no auth — anyone can reach it," because the
+// detector didn't know Firebase's canonical auth shape and only looked ~400 chars
+// past the route declaration. These mirror WSYATM's Backend/src/index.js shape.
+describe("Firebase/inline-Bearer auth recognition (regression)", () => {
+  // An admin route whose Bearer check + verifyIdToken + role gate sit ~25 lines
+  // deep in the handler body (past the old 400-char window).
+  const wsyatmAdminRoute = `
+app.get('/api/admin/stats', strictLimiter, async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Unauthorized. Please provide a valid token." });
+  }
+
+  const idToken = authHeader.split('Bearer ')[1];
+
+  try {
+    const decodedToken = await auth.verifyIdToken(idToken);
+    const uid = decodedToken.uid;
+
+    // Check if user is an admin
+    const userDocRef = db.collection("users").doc(uid);
+    const userDoc = await userDocRef.get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    const userData = userDoc.data();
+    if (userData.role !== 'admin') {
+      return res.status(403).json({ error: "Access denied. Admin role required." });
+    }
+
+    const usersSnapshot = await db.collection("users").count().get();
+    res.status(200).json({ users: usersSnapshot.data().count });
+  } catch (error) {
+    res.status(500).json({ error: "Internal" });
+  }
+});
+`;
+
+  it("marks an inline-Bearer + verifyIdToken Express admin route as ENFORCED, not absent", () => {
+    const routes = scanRoutes(wsyatmAdminRoute, "Backend/src/index.js");
+    const adminRoute = routes.find((r) => r.path.includes("/admin/"))!;
+    expect(adminRoute).toBeTruthy();
+    expect(adminRoute.isAdmin).toBe(true);
+    expect(adminRoute.authStatus).toBe("enforced"); // was "unknown" → 5 FPs
+  });
+
+  it("does NOT raise admin-route-no-auth on the inline-Bearer admin route", () => {
+    const routes = scanRoutes(wsyatmAdminRoute, "Backend/src/index.js");
+    const ft = new Map([["Backend/src/index.js", wsyatmAdminRoute]]);
+    const findings = auditAdminRoutes(routes, ft);
+    // The role gate (role !== 'admin') is present too → no role-gate finding either.
+    expect(findings.some((f) => f.finding_type === "admin-route-no-auth")).toBe(false);
+    expect(findings.some((f) => f.finding_type === "admin-route-no-role-gate")).toBe(false);
+  });
+
+  it("recognizes a Firebase v2 bare-onRequest verifyAuthToken + checkAdminRole handler", () => {
+    const src = `
+const {onRequest} = require("firebase-functions/v2/https");
+const { verifyAuthToken, checkAdminRole } = require("../utils/helpers");
+
+const adminThing = onRequest({cors: true}, async (req, res) => {
+  const decodedToken = await verifyAuthToken(req);
+  const uid = decodedToken.uid;
+  await checkAdminRole(uid);
+  return res.json({ ok: true });
+});`;
+    const routes = scanRoutes(src, "functions/src/admin/userManagement.js");
+    // v2 bare onRequest (gated on firebase-functions import) → inventoried.
+    const fbRoute = routes.find((r) => r.framework === "firebase-functions")!;
+    expect(fbRoute).toBeTruthy();
+    expect(fbRoute.authStatus).toBe("enforced");
+  });
+
+  it("scopes Firebase v2 auth per handler — an unauthed sibling stays unknown", () => {
+    // quiz.js shape: imports verifyAuthToken (used by a later handler) but the
+    // first onRequest handler has no auth in its OWN body.
+    const src = `
+const {onRequest} = require("firebase-functions/v2/https");
+const { verifyAuthToken, geminiApiKey } = require("../utils/helpers");
+
+const generateQuiz = onRequest({cors: true}, async (req, res) => {
+  const {movieTitle} = req.body;
+  const result = await model.generateContent(prompt);
+  return res.json(result);
+});
+
+const getHistory = onRequest({cors: true}, async (req, res) => {
+  const decodedToken = await verifyAuthToken(req);
+  return res.json({ history: [] });
+});`;
+    const routes = scanRoutes(src, "functions/src/games/quiz.js").filter(
+      (r) => r.framework === "firebase-functions",
+    );
+    expect(routes.length).toBe(2);
+    // generateQuiz handler has NO auth in its body → unknown (not masked by the
+    // file-level verifyAuthToken import used by getHistory).
+    expect(routes[0]!.authStatus).toBe("unknown");
+    expect(routes[1]!.authStatus).toBe("enforced");
+  });
+
+  it("STILL flags a genuinely unprotected Express admin route as Critical", () => {
+    const open = `
+app.delete('/api/admin/wipe', async (req, res) => {
+  await db.collection("everything").drop();
+  return res.json({ wiped: true });
+});`;
+    const routes = scanRoutes(open, "Backend/src/index.js");
+    const ft = new Map([["Backend/src/index.js", open]]);
+    const findings = auditAdminRoutes(routes, ft);
+    expect(findings.some((f) => f.finding_type === "admin-route-no-auth")).toBe(true);
+    expect(findings.find((f) => f.finding_type === "admin-route-no-auth")!.severity).toBe("critical");
+  });
+});
+
 // ─── Probe 3: tenant isolation (the signature finding) ─────────────────────
 describe("tenant isolation", () => {
   it("flags a Supabase table created without RLS as Critical", () => {
