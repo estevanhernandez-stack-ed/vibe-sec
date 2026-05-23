@@ -314,5 +314,77 @@ export {
   abuseMonitoringToFinding,
 } from "./detectors/to-findings.js";
 
+// Report layer (3.5) — four-band structure + banner + markdown renderers.
+export {
+  buildBandedReport,
+  bandFor,
+  selectComplements,
+  graduationNote,
+  type BandedReport,
+  type BandNumber,
+  type Complement,
+  type ComplementContext,
+} from "./report/bands.js";
+export {
+  renderBanner,
+  renderAuthzMatrixAbbreviated,
+  worstSeverity,
+  type BannerOptions,
+} from "./report/banner.js";
+export {
+  renderMarkdownReport,
+  renderOwaspGrouped,
+  alsoTaggedAs,
+  type MarkdownReportOptions,
+} from "./report/markdown.js";
+
+// Fix engine (3.5) — confidence routing + destructive overrides + auto + stage.
+export {
+  routeFix,
+  isDestructive,
+  destructiveKindOf,
+  AUTO_CONFIDENCE,
+  STAGE_CONFIDENCE,
+  DESTRUCTIVE_RULES,
+  type RouteDecision,
+  type DestructiveKind,
+} from "./fix/route.js";
+export {
+  canAutoApply,
+  isAutoApplyable,
+  applyGitignoreAdd,
+  scaBumpDecision,
+  actionShaPinDecision,
+  GITIGNORE_BANNER,
+  type AutoFixKind,
+  type AutoApplyContext,
+  type AutoApplyResult,
+  type CommandRunner as FixCommandRunner,
+} from "./fix/apply.js";
+export {
+  stageFix,
+  stagedFixFilename,
+  stagedFixRef,
+  listStagedFixes,
+  clearStagedFix,
+  type StagedFix,
+} from "./fix/stage.js";
+export {
+  recordSuppression,
+  isSuppressed,
+  listSuppressions,
+  GLOBAL_PROMPT_THRESHOLD,
+  type SuppressionRecord,
+  type SuppressResult,
+} from "./fix/suppression.js";
+
+// Gate runner (3.5) — CI pass/fail over cached findings + GH Actions annotations.
+export {
+  runGate,
+  foldConcernResults,
+  buildAnnotations,
+  type GateRunResult,
+} from "./gate/run-gate.js";
+
 // CLI core (re-export for headless CI).
 export { runCli, VERSION } from "./cli.js";

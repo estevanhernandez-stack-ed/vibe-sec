@@ -4,29 +4,89 @@ description: >
   Full tier-calibrated security audit across all ten concerns. Use when the user
   says "/vibe-sec:audit", "full security audit", "audit my app", "run a complete
   security check", "what security gaps do I have". Classifies the project tier,
-  runs the in-scope concerns (deferring to external tools when present), and
-  renders the four-band report. Phase 1 ships the foundation; full ten-concern
-  orchestration lands in subsequent phases.
+  runs the in-scope concern detectors (deferring to external tools when present),
+  collects findings.jsonl, and renders the four-band report across all three
+  channels — markdown report, terminal banner, and the findings.jsonl sidecar.
 ---
 
 # Vibe Sec — audit
 
-Read `${CLAUDE_PLUGIN_ROOT}/skills/guide/SKILL.md` first.
+Read `${CLAUDE_PLUGIN_ROOT}/skills/guide/SKILL.md` first for the shared
+positioning, the tier→ASVS table, the amplifier rule, and the safety line.
 
-`/vibe-sec:audit` is the full orchestrator. The flow:
+`/vibe-sec:audit` is the full orchestrator — agent-heavy orchestration over the
+deterministic TypeScript detectors. Lead with the verdict, then the bands.
 
-1. Read the Vibe Test handshake (`.vibe-test/state/covered-surfaces.json`) and
-   classify the tier — inherit when fresh, self-scan otherwise.
-2. Run each in-scope concern at the current tier (skip concerns are excluded
-   from the score denominator). Defer to the tool of record per concern.
-3. Compute the weighted score with the severity amplifier applied.
-4. Render the four-band report: critical-now / tier-appropriate-education /
-   graduating-guidance / Pattern #13 complements. Write findings.jsonl + audit.json.
+## The flow
 
-## Phase 1 status
+1. **Classify the tier (inherit-or-scan).** Read the Vibe Test handshake
+   (`.vibe-test/state/covered-surfaces.json`) — if present and fresh (≤24h),
+   inherit `classification.tier` + `modifiers[]`. A security signal that
+   promotes above the inherited tier emits a `tier_drift_note` (name it to the
+   user). Absent or stale → self-classify via the repo signals. Never fail;
+   degrade gracefully.
 
-The scoring substrate, classifier, state I/O, and the secret-detection concern
-are built. The remaining nine concerns and the four-band report renderer land in
-Phases 2-4. For now, `/vibe-sec:audit` can classify the tier and run the secret
-scan; tell the user plainly that the full ten-concern orchestration is in
-progress rather than fabricating findings for unbuilt concerns.
+2. **Run every in-scope concern detector for the tier.** The scope grid is the
+   gate: `skip` concerns are excluded from the score denominator entirely (tier
+   is a scope gate, not just a severity dial). Per concern, detect the tool of
+   record — defer to it when present (gitleaks, OSV-Scanner, Semgrep CE, …),
+   fall back to the in-house baseline when absent, credit whichever ran.
+
+   The ten concerns: secrets, dependency-cve, supply-chain, config-posture,
+   crypto-pii, auth-model, owasp-survey, rate-limiting, tier-thresholds (the
+   math substrate, always on), threat-model. **Threat-model is the sink node:**
+   at Internal tier it's opt-in only (Conflict 2 = C) — NOT auto-included in
+   `:audit`. Point the user at `/vibe-sec:threat-model` if they want it at
+   Internal. From Public-facing up it runs as part of the audit.
+
+3. **Collect findings.jsonl.** Each detector's output maps through the
+   `to-findings` mappers into the single `Finding` schema, deduped by id, and
+   appends to `.vibe-sec/state/findings.jsonl`. One finding owns exactly one
+   `primary_concern` (the deepest-domain owner); cross-references go to
+   `secondary_concerns[]`. The weighted-score reader dedupes by id, so the same
+   finding counts once even when several concerns tag it.
+
+4. **Compute the weighted score** with the severity amplifier applied
+   (Critical → 0.5 cap, High → 0.8 cap per concern). Skipped concerns are out of
+   the denominator. Write `audit.json` (tier, score, gate verdict, counts,
+   tools used).
+
+5. **Render the four-band report across all three channels:**
+   - **Markdown** → `docs/vibe-sec/audit-report.md` — runbook-grade, four-band,
+     plus the OWASP-category-grouped subsection (one finding rendered under each
+     applicable category with an "also tagged as…" annotation — it's one finding
+     wearing all its tags, counted once). The authorization matrix renders via
+     the existing `renderMatrixMarkdown()`.
+   - **Terminal banner** → in-chat ANSI. Verdict, Band-1 action items, the
+     abbreviated authz matrix (the gaps), Band-4 leads.
+   - **findings.jsonl** → the append-only machine-readable + cross-plugin sidecar.
+
+## The four bands (spec §7)
+
+1. **Critical / High — action needed now.** In-scope, gate-relevant.
+2. **Tier-appropriate but worth reading** — the education surface; where the
+   OWASP 2021 → 2025 reclassifications get named.
+3. **Tier-inappropriate but if you graduate** — forward-looking next-tier story
+   (the concerns that come into scope one tier up).
+4. **Pattern #13 complements** — tools that catch classes the baseline misses,
+   led by detected context: Socket for SCA, Arcjet for LLM routes, Semgrep for
+   injection. Don't re-recommend a tool that already ran.
+
+The bands respect builder fatigue: surface critical-now without burying it under
+tier-inappropriate noise. The denominator excludes skipped concerns — don't
+report a Prototype app as failing on Customer-facing concerns it never opted into.
+
+## Running it
+
+The detection + report assembly is built TypeScript (`src/report/`, `src/fix/`,
+`src/detectors/`). Orchestrate over those entry points — `buildBandedReport`,
+`renderMarkdownReport`, `renderBanner`, `appendFindings`, `writeAuditState`. Do
+not hand-fabricate findings; run the detectors and map their real output.
+
+## What to tell the user
+
+Lead with the tier + the verdict: "Classified <tier> (<ASVS floor>). Weighted
+score N% vs the M% bar — PASS/FAIL." Then the Band-1 count and the worst item.
+Name which tools ran (in-house vs deferred). If threat-model was skipped at
+Internal, say it's opt-in via `/vibe-sec:threat-model`. Point at
+`/vibe-sec:fix` for remediation and `/vibe-sec:gate` for CI.
