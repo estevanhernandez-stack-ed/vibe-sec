@@ -3,15 +3,17 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { scanSecrets } from "./secrets/index.js";
-import { scanDependencies } from "./deps/index.js";
+import { scanDependencies, depCoverageAdvisory } from "./deps/index.js";
 import { scanSupplyChain } from "./supply-chain/index.js";
 import {
   resetFindingIds,
   secretToFinding,
   depToFinding,
+  depNotCheckedToFinding,
   pinningToFinding,
   typosquatToFinding,
 } from "./to-findings.js";
+import type { SecretFinding } from "./secrets/scan-tree.js";
 import { appendFindings, readFindings, validateFinding } from "../state/findings.js";
 import type { CommandRunner } from "../orchestration/defer.js";
 import type { ToolProbe } from "../orchestration/tool-registry.js";
@@ -108,6 +110,69 @@ describe("2.5 — /vibe-sec:deps writes findings.jsonl (CVE + integrity + pinnin
     // SBOM detection still records presence (cheap), but typosquat is skipped.
     expect(fast.typosquats).toHaveLength(0);
     expect(full.typosquats.length).toBeGreaterThan(0);
+  });
+});
+
+// ─── Regression: Firebase-web-key informational mapping (Fix 2) ─────────────
+describe("secretToFinding — informational Firebase web key (regression)", () => {
+  it("maps an informational secret to inform-only + companion routing, not a blocker", () => {
+    resetFindingIds();
+    const webKey: SecretFinding = {
+      pattern: "FIREBASE_WEB_API_KEY",
+      severity: "low",
+      file: "src/firebase.ts",
+      line: 3,
+      column: 10,
+      match: "AIzaS…AAAA",
+      preview: 'apiKey: "AIzaS…AAAA"',
+      remediation: "Firebase web API keys are public by design.",
+      informational: true,
+      companion: "config-posture",
+    };
+    const f = secretToFinding(webKey, "public-facing");
+    expect(f.severity_tier_adjusted).toBe("low");
+    expect(f.fix_class).toBe("inform-only");
+    expect(f.secondary_concerns).toContain("config-posture");
+    expect(f.title).toContain("Public-by-design");
+    expect(validateFinding(f)).toEqual([]);
+  });
+});
+
+// ─── Regression: dependency-cve no-op coverage advisory (Fix 3) ─────────────
+describe("dependency-cve coverage advisory (regression)", () => {
+  it("scanDependencies flags notChecked when no osv-scanner + no npm audit", () => {
+    write("package.json", JSON.stringify({ dependencies: { left: "1.0.0" } }));
+    // Runner that mimics npm being unavailable (throws with no stdout).
+    const runner: CommandRunner = () => {
+      throw new Error("npm not found");
+    };
+    const res = scanDependencies(tmp, { probe: noTools, runner });
+    expect(res.osvSource).toBe("none");
+    expect(res.npmAuditRan).toBe(false);
+    expect(res.notChecked).toBe(true);
+    expect(res.findings.length).toBe(0);
+  });
+
+  it("maps the coverage advisory to an inform-only low finding (not a clean pass)", () => {
+    resetFindingIds();
+    const f = depNotCheckedToFinding(depCoverageAdvisory(), "public-facing");
+    expect(f.primary_concern).toBe("dependency-cve");
+    expect(f.severity_tier_adjusted).toBe("low");
+    expect(f.fix_class).toBe("inform-only");
+    expect(f.finding_type).toBe("dependency-scan-not-performed");
+    expect(f.description).toMatch(/not a clean pass/i);
+    expect(validateFinding(f)).toEqual([]);
+  });
+
+  it("does NOT flag notChecked when npm audit ran (even with zero vulns)", () => {
+    write("package.json", JSON.stringify({ dependencies: { left: "1.0.0" } }));
+    const runner: CommandRunner = (cmd, args) => {
+      if (cmd === "npm" && args.includes("audit")) return JSON.stringify({ vulnerabilities: {} });
+      return "";
+    };
+    const res = scanDependencies(tmp, { probe: noTools, runner });
+    expect(res.npmAuditRan).toBe(true);
+    expect(res.notChecked).toBe(false);
   });
 });
 

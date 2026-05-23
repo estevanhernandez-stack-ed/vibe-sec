@@ -31,6 +31,13 @@ export interface DepScanResult {
   omitDev: boolean;
   osvSource: "osv-scanner" | "osv.dev" | "none";
   npmAuditRan: boolean;
+  /**
+   * True when NO data source could be reached — osv-scanner absent, no OSV.dev
+   * fetcher wired, AND npm audit did not run. A 0-finding result here means
+   * "couldn't look," not "no CVEs" — the caller must surface a coverage advisory
+   * so a clean 1.0 score isn't falsely reassuring (WSYATM dogfood §5, 2026-05-23).
+   */
+  notChecked: boolean;
   /** EPSS/KEV hook: schema present, scoring unwired in v0.2 (Decision 13). */
   epssWired: false;
 }
@@ -55,13 +62,37 @@ export function scanDependencies(
 
   const findings = mergeDepFindings(osv.vulnerabilities, audit.vulnerabilities);
 
+  // No source reached: osv-scanner absent (source "none") AND npm audit didn't
+  // run. A 0-finding result in that state is unchecked, not clean.
+  const notChecked = osv.source === "none" && !audit.ran;
+
   return {
     findings,
     projectKind: classification.kind,
     omitDev: classification.omitDev,
     osvSource: osv.source,
     npmAuditRan: audit.ran,
+    notChecked,
     epssWired: false,
+  };
+}
+
+/**
+ * Build the coverage advisory the caller emits when a dependency scan ran as a
+ * no-op (no osv-scanner, no OSV.dev fetcher, npm audit unavailable). Returns the
+ * advisory descriptor; the mapper turns it into an inform-only Finding so a
+ * 1.0 dependency-cve score never silently reads as "no CVEs found."
+ */
+export interface DepCoverageAdvisory {
+  finding_type: "dependency-scan-not-performed";
+  detail: string;
+}
+
+export function depCoverageAdvisory(): DepCoverageAdvisory {
+  return {
+    finding_type: "dependency-scan-not-performed",
+    detail:
+      "Dependency CVE scan ran as a no-op — osv-scanner is not on PATH and no OSV.dev network access was wired, so no vulnerability data source could be reached. This is NOT a clean pass: unchecked, not safe. Install osv-scanner (github.com/google/osv-scanner) or wire OSV.dev access, then re-run.",
   };
 }
 

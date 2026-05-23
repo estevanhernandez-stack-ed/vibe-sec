@@ -82,11 +82,13 @@ export {
 // Dependency-CVE (#1) — OSV + npm audit + dedupe + app/lib classifier.
 export {
   scanDependencies,
+  depCoverageAdvisory,
   shouldRollbackChurn,
   countDiffLines,
   LOCKFILE_CHURN_LIMIT,
   type DepScanResult,
   type DepScanOptions,
+  type DepCoverageAdvisory,
 } from "./detectors/deps/index.js";
 export {
   scanOsv,
@@ -289,6 +291,7 @@ export {
   resetFindingIds,
   secretToFinding,
   depToFinding,
+  depNotCheckedToFinding,
   pinningToFinding,
   typosquatToFinding,
   actionsToFinding,
