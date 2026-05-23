@@ -1,6 +1,6 @@
 {
   "name": "@esthernandez/vibe-sec",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Tier-aware security audit + orchestration layer for vibe-coded apps. Defers to gitleaks/OSV-Scanner/Semgrep when present, falls back to an in-house baseline when absent, and owns the classification, severity calibration, four-band report, fix routing, and threat-model synthesis on top. A Claude Code plugin.",
   "license": "MIT",
   "type": "module",

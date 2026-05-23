@@ -2,7 +2,7 @@
 
 This is the workspace-level changelog. Per-package changelogs live at:
 
-- `packages/vibe-sec/CHANGELOG.md` — plugin changes (TBD; plugin is currently a reservation stub)
+- `packages/vibe-sec/CHANGELOG.md` — plugin changes (live as of v0.2.0)
 - `packages/vibe-sec-cli/CHANGELOG.md` — CLI changes (TBD; first entry once first post-migration release lands)
 
 ## 2026-04-19 — Solo repo extracted from monorepo
