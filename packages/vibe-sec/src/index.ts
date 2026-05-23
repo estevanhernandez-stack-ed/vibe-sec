@@ -386,5 +386,49 @@ export {
   type GateRunResult,
 } from "./gate/run-gate.js";
 
+// Threat-model synthesis sink (4.1) — STRIDE/DREAD/LINDDUN + Mermaid + Threat Dragon.
+export {
+  runThreatModel,
+  synthesizeThreatModel,
+  checkCompleteness,
+  buildDfd,
+  resetThreatIds,
+  threatModelInAudit,
+  renderThreatModelMarkdown,
+  renderMermaidDfd,
+  toThreatDragon,
+  STRIDE_CATEGORIES,
+  type ThreatModelRunOptions,
+  type ThreatModelRunResult,
+  type ThreatModelInput,
+  type ThreatModelResult,
+  type Threat,
+  type PrivacyThreat,
+  type AttackTree,
+  type Dfd,
+  type DfdNode,
+  type DfdShape,
+  type DfdFlow,
+  type TrustBoundary,
+  type StrideCategory,
+  type LinddunCategory,
+  type DreadScore,
+  type DreadLevel,
+  type CompletenessCheck,
+  type MarkdownThreatModelOptions,
+  type ThreatDragonModel,
+} from "./threat-model/index.js";
+
+// SECURITY.md generator (4.3) — emit-only, ASVS-cited graduating guidance.
+export {
+  generateSecurityMd,
+  emitSecurityMd,
+  TIER_ASVS_CITATION,
+  type SecurityMdOptions,
+} from "./state/security-md.js";
+
+// SECURITY.md path helper.
+export { securityMdPath } from "./state/paths.js";
+
 // CLI core (re-export for headless CI).
 export { runCli, VERSION } from "./cli.js";

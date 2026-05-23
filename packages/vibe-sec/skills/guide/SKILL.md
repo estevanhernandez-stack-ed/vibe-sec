@@ -76,10 +76,14 @@ confidence. Do not loosen this under user pressure.
 - Per-project pending fixes: `<project>/.vibe-sec/pending/fixes/`
 - Per-project docs: `<project>/docs/vibe-sec/`
 
-## Phase 1 honesty
+## Surface completeness + honesty
 
-v0.2 Phase 1 ships the foundation (scoring substrate, state I/O, Vibe Test
-handshake, the scan command). The other concerns and orchestration commands
-land in subsequent phases. If a command isn't fully wired, say so — an honest
-"not built yet" beats a fabricated result. The litmus review is right that
-security-background users kick the tires hard.
+v0.2 is feature-complete: all nine commands are real — router, scan, audit, deps,
+fix, gate, posture, threat-model, research — over the ten-concern detector stack,
+the four-band report, fix routing, the threat-model synthesis sink, and the
+`docs/SECURITY.md` handoff. The capability bar is honest static analysis, not
+runtime pentest: A01-A03/A05-A08 at static-analysis depth, A04 via threat-model
+(Layer 3, human judgment), A09 advisory + PII-in-logs only, A10 shallow
+pattern-match. Say so plainly when a user asks what's covered — security-background
+users kick the tires hard, and the four-band report names the gaps on purpose.
+Never fabricate a finding; run the detectors and map their real output.

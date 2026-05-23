@@ -35,9 +35,11 @@ deterministic TypeScript detectors. Lead with the verdict, then the bands.
    The ten concerns: secrets, dependency-cve, supply-chain, config-posture,
    crypto-pii, auth-model, owasp-survey, rate-limiting, tier-thresholds (the
    math substrate, always on), threat-model. **Threat-model is the sink node:**
-   at Internal tier it's opt-in only (Conflict 2 = C) — NOT auto-included in
+   consult `threatModelInAudit(tier)` before running it. At Prototype and
+   Internal it returns false (Conflict 2 = C — opt-in only); NOT auto-included in
    `:audit`. Point the user at `/vibe-sec:threat-model` if they want it at
-   Internal. From Public-facing up it runs as part of the audit.
+   Internal. From Public-facing up it returns true and runs last, after every
+   other concern (the sink node is never parallelized).
 
 3. **Collect findings.jsonl.** Each detector's output maps through the
    `to-findings` mappers into the single `Finding` schema, deduped by id, and
@@ -82,6 +84,17 @@ The detection + report assembly is built TypeScript (`src/report/`, `src/fix/`,
 `src/detectors/`). Orchestrate over those entry points — `buildBandedReport`,
 `renderMarkdownReport`, `renderBanner`, `appendFindings`, `writeAuditState`. Do
 not hand-fabricate findings; run the detectors and map their real output.
+
+## Emitting docs/SECURITY.md
+
+`/vibe-sec:audit --security-md` (or when the user asks for a security policy)
+emits a builder-sustainable `docs/SECURITY.md` via `emitSecurityMd` — the
+ASVS-cited verification target, current posture from the findings, graduating
+guidance for the next tier, the locked threat-model Mermaid convention, and the
+Pattern #13 complements (including honeytokens surfaced as a recommendation, not
+a generated artifact). Emit-only for v0.2 — re-running regenerates; the builder
+edits freely. Cite ASVS in the copy: "regulated tier" resolves to ASVS L3 + NIST
+SSDF + SBOM, not aspiration.
 
 ## What to tell the user
 
