@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "vibe-sec",
-      "description": "Security gap finder for vibe-coded apps — the tier-aware audit and orchestration layer that defers to gitleaks/OSV-Scanner/Semgrep when present and falls back to an in-house baseline when absent. Early access (v0.4.0): /vibe-sec:audit is live — a tier-calibrated scan across all ten concerns (secrets, deps, supply-chain, config, crypto/PII, auth-model, OWASP survey, rate-limiting) into a four-band report, plus :scan, :deps, :gate (CI-safe), :posture, and :fix (confidence-routed with destructive-action overrides). Threat-model synthesis and :research land next.",
+      "description": "Security gap finder for vibe-coded apps — the tier-aware audit and orchestration layer that defers to gitleaks/OSV-Scanner/Semgrep when present and falls back to an in-house baseline when absent. Early access (v0.5.0 — full command surface): /vibe-sec:audit (ten-concern tier-calibrated four-band report), :scan, :deps, :gate (CI-safe), :posture, :fix (confidence-routed with destructive-action overrides), :threat-model (STRIDE/DREAD + Mermaid + Threat Dragon export), and :research. Stable promotion follows real-app validation.",
       "source": "./packages/vibe-sec"
     }
   ]

@@ -3,6 +3,16 @@
 Plugin releases. The CLI has its own changelog at `../vibe-sec-cli/CHANGELOG.md`.
 Tag convention: `vibe-sec-vX.Y.Z`.
 
+## [0.5.0] — 2026-05-23 — Phase 4: threat-model sink + research + SECURITY.md (full surface)
+
+The synthesis sink and the last commands land. All nine commands are now real over the ten-concern stack.
+
+- **Threat-model synthesis (the sink).** STRIDE + DREAD + LINDDUN (Customer-facing+) + attack-trees, consuming all nine other concerns + Vibe Test covered-surfaces. Mermaid DFD (locked shape convention) + Threat-Dragon-v2.5.0-compatible JSON sidecar. Inventory-completeness banner when route coverage <90%. Internal-tier opt-in (not auto-included in `:audit`).
+- **`/vibe-sec:research`** — re-run one concern's domain research (living docs), `--concern <name>`.
+- **`SECURITY.md` generation** — ASVS-cited graduating guidance; honeytokens surfaced as a Pattern #13 recommendation (emit-only, no token values).
+
+315 tests green. Canary / early-access; real-app dogfood + stable promotion next.
+
 ## [0.4.0] — 2026-05-23 — Phase 3: structural detectors + audit orchestration
 
 The four structural detectors land and the orchestration commands wire all ten concerns into a real audit. `/vibe-sec:audit`, `:gate`, `:posture`, and `:fix` go live.
