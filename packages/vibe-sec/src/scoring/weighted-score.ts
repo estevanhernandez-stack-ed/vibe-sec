@@ -152,21 +152,44 @@ export function isInScope(concern: Concern, tier: Tier): boolean {
 }
 
 /**
- * The concerns whose High/Critical findings hard-fail the gate at a tier.
- * Derived from spec §2.4. Threat-model (#9) is always advisory.
+ * The concerns whose High/Critical findings hard-fail the gate at a tier
+ * (spec §2.4). Threat-model (#9) is always advisory, never gate-blocking.
+ *
+ * This is the explicit spec §2.4 table, NOT a projection of the SCOPE_GRID —
+ * the grid's "full" vs "mandatory" cell labels are about denominator scope +
+ * detection depth, which is a separate axis from gate-blocking. Public-facing's
+ * mandatory set (concerns 3,5,7,8) includes config-posture (5), which the grid
+ * marks "full"; deriving mandatory from the grid silently dropped it. Encoding
+ * §2.4 directly keeps the gate honest to the spec.
  */
+const MANDATORY_BY_TIER: Record<Tier, Concern[]> = {
+  // No concern individually mandatory; Critical-in-1/2/7 handled separately.
+  prototype: [],
+  internal: [],
+  // §2.4: concerns 3, 5, 7, 8.
+  "public-facing": ["owasp-survey", "config-posture", "rate-limiting", "auth-model"],
+  // §2.4: concerns 1, 3, 4, 5, 6, 7, 8.
+  "customer-facing-saas": [
+    "dependency-cve",
+    "owasp-survey",
+    "crypto-pii",
+    "config-posture",
+    "supply-chain",
+    "rate-limiting",
+    "auth-model",
+  ],
+  // §2.4: "no High anywhere except #9" — every detector concern is mandatory.
+  regulated: [],
+};
+
 export function mandatoryConcerns(tier: Tier): Concern[] {
-  const out: Concern[] = [];
-  for (const c of ALL_CONCERNS) {
-    if (c === "threat-model" || c === "tier-thresholds") continue;
-    if (tier === "regulated") {
-      // "no High anywhere except #9" — every detector concern is mandatory.
-      out.push(c);
-    } else if (SCOPE_GRID[c][tier] === "mandatory") {
-      out.push(c);
-    }
+  if (tier === "regulated") {
+    // Every detector concern except the advisory threat-model + meta tier-thresholds.
+    return ALL_CONCERNS.filter(
+      (c) => c !== "threat-model" && c !== "tier-thresholds",
+    );
   }
-  return out;
+  return [...MANDATORY_BY_TIER[tier]];
 }
 
 /**
