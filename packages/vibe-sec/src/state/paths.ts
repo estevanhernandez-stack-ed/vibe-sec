@@ -42,6 +42,14 @@ export function projectDocsDir(projectRoot: string): string {
   return path.join(path.resolve(projectRoot), "docs", "vibe-sec");
 }
 
+/**
+ * SECURITY.md path: <project>/docs/SECURITY.md — the GitHub-recognized location
+ * for a security policy (builder-facing, not under the vibe-sec subdir).
+ */
+export function securityMdPath(projectRoot: string): string {
+  return path.join(path.resolve(projectRoot), "docs", "SECURITY.md");
+}
+
 /** findings.jsonl path. */
 export function findingsPath(projectRoot: string, app?: string): string {
   return path.join(projectStateDir(projectRoot, app), "findings.jsonl");

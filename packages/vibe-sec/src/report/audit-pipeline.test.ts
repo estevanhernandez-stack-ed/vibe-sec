@@ -26,12 +26,13 @@ import {
   readFindingsDeduped,
   type Finding,
 } from "../state/findings.js";
-import { findingsPath } from "../state/paths.js";
+import { findingsPath, threatModelStatePath, projectDocsDir } from "../state/paths.js";
 import { writeAuditState, readAuditState, type AuditState } from "../state/audit-state.js";
 import { buildBandedReport } from "./bands.js";
 import { renderMarkdownReport } from "./markdown.js";
 import { renderBanner } from "./banner.js";
 import { runGate } from "../gate/run-gate.js";
+import { threatModelInAudit, runThreatModel } from "../threat-model/index.js";
 import type { ToolProbe } from "../orchestration/tool-registry.js";
 import type { Tier } from "../types.js";
 
@@ -161,5 +162,35 @@ describe("3.5 /vibe-sec:audit — clean fixture", () => {
     expect(out.report.band1).toHaveLength(0);
     const gate = runGate(tmp);
     expect(gate.exit).toBe(0);
+  });
+});
+
+describe("4.1 threat-model — Internal-tier opt-in (Conflict 2 = C)", () => {
+  it("threatModelInAudit is false at Internal and Prototype, true Public-facing+", () => {
+    // The audit orchestrator consults this before running the sink node. At
+    // Internal the threat model is OPT-IN ONLY — not auto-run in :audit.
+    expect(threatModelInAudit("prototype")).toBe(false);
+    expect(threatModelInAudit("internal")).toBe(false);
+    expect(threatModelInAudit("public-facing")).toBe(true);
+    expect(threatModelInAudit("customer-facing-saas")).toBe(true);
+    expect(threatModelInAudit("regulated")).toBe(true);
+  });
+
+  it("an Internal-tier audit does not write a threat-model artifact unless opted in", () => {
+    write("app/api/users/route.ts", `export async function GET() {}`);
+    runAudit(tmp, "internal");
+
+    // The audit at Internal skips the sink node (threatModelInAudit === false),
+    // so the threat-model channels are absent. Only a direct
+    // /vibe-sec:threat-model (opt-in) would emit them.
+    if (!threatModelInAudit("internal")) {
+      expect(fs.existsSync(threatModelStatePath(tmp))).toBe(false);
+      expect(fs.existsSync(path.join(projectDocsDir(tmp), "threat-model.md"))).toBe(false);
+    }
+
+    // Opt-in path: a direct run DOES emit (and is allowed at Internal).
+    const out = runThreatModel(tmp, { tier: "internal", write: true });
+    expect(out.result.isStub).toBe(false);
+    expect(fs.existsSync(path.join(projectDocsDir(tmp), "threat-model.md"))).toBe(true);
   });
 });
