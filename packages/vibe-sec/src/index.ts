@@ -231,6 +231,29 @@ export {
   type FingerprintResult,
 } from "./scanner/platform-fingerprint.js";
 
+// OWASP Top 10 survey (#3): breadth rules, dual 2021/2025 tagging, shallow SSRF,
+// dynamic-code sinks, primary-concern ownership assignment.
+export {
+  scanOwaspSurvey,
+  tagFinding,
+  scanSurveyRules,
+  scanSsrf,
+  scanDynamicCodeSinks,
+  type OwaspSurveyScanResult,
+  type OwaspSurveyScanOptions,
+  type TaggedSurveyFinding,
+  type SurveyFinding,
+  type SsrfFinding,
+  type DynamicCodeFinding,
+} from "./detectors/owasp-survey/index.js";
+export {
+  dualTag,
+  type OwaspTags,
+  type Owasp2021,
+} from "./detectors/owasp-survey/dual-tag.js";
+// (dualTag is also re-exported by the owasp-survey index; the direct dual-tag
+//  re-export above is the canonical one — keep this one, not the index passthrough.)
+
 // Shared source-tree walker for the structural detectors (Phase 3).
 export {
   walkSource,
@@ -261,6 +284,9 @@ export {
   sessionToFinding,
   roleHardcodingToFinding,
   cve202529927ToFinding,
+  surveyToFinding,
+  ssrfToFinding,
+  dynamicCodeToFinding,
 } from "./detectors/to-findings.js";
 
 // CLI core (re-export for headless CI).

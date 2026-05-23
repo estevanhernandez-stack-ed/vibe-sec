@@ -31,6 +31,10 @@ import type { IdorFinding } from "./auth-model/idor.js";
 import type { SessionFinding } from "./auth-model/session.js";
 import type { RoleHardcodeFinding } from "./auth-model/role-hardcoding.js";
 import type { Cve202529927Result } from "./config-posture/cve-2025-29927.js";
+import type { TaggedSurveyFinding } from "./owasp-survey/index.js";
+import type { SsrfFinding } from "./owasp-survey/ssrf-shallow.js";
+import type { DynamicCodeFinding } from "./owasp-survey/dynamic-code-sinks.js";
+import { dualTag } from "./owasp-survey/dual-tag.js";
 
 const PUBLIC_FACING_TIERS = new Set<Tier>([
   "public-facing",
@@ -462,6 +466,82 @@ export function roleHardcodingToFinding(r: RoleHardcodeFinding, tier: Tier): Fin
     owasp_2021: "A01",
     owasp_2025: "A01",
     references: ["OWASP-A01-2021"],
+  });
+}
+
+// ─── owasp-survey → findings (concern #3) ────────────────────────────────
+// Every survey finding carries BOTH owasp_2021 and owasp_2025 (Decision 3).
+
+export function surveyToFinding(s: TaggedSurveyFinding, tier: Tier): Finding {
+  // Dynamic A03/A09 survey findings stage; the rest are advisory/stage by class.
+  const fixClass: FixClass = s.category === "A09" ? "advisory" : "stage";
+  const refs = [`OWASP-${s.tags.owasp_2021}-2021`];
+  if (s.tags.reclassified) refs.push(`OWASP-${s.tags.owasp_2025}-2025`);
+  return makeFinding({
+    id: nextId("owasp"),
+    primary_concern: s.primary_concern,
+    secondary_concerns: s.secondary_concerns,
+    severity_base: s.severity,
+    severity_tier_adjusted: s.severity,
+    confidence: s.confidence,
+    finding_type: s.finding_type,
+    title: `OWASP ${s.tags.owasp_2021}: ${s.finding_type}`,
+    description: s.tags.shiftNote ? `${s.detail} (${s.tags.shiftNote})` : s.detail,
+    file: s.file,
+    line: s.line,
+    tier,
+    fix_class: fixClass,
+    tool_of_record: "in-house",
+    owasp_2021: s.tags.owasp_2021,
+    owasp_2025: s.tags.owasp_2025,
+    references: refs,
+  });
+}
+
+export function ssrfToFinding(s: SsrfFinding, tier: Tier): Finding {
+  // SSRF: A10-2021 → A01-2025 (the reclassification worth teaching).
+  const tags = dualTag("A10");
+  return makeFinding({
+    id: nextId("owasp"),
+    primary_concern: "owasp-survey",
+    severity_base: s.severity,
+    severity_tier_adjusted: s.severity,
+    confidence: s.confidence,
+    finding_type: s.finding_type,
+    title: "Shallow SSRF — user-controlled outbound URL",
+    description: `${s.detail} (${tags.shiftNote})`,
+    file: s.file,
+    line: s.line,
+    tier,
+    fix_class: "stage",
+    tool_of_record: "in-house",
+    owasp_2021: tags.owasp_2021,
+    owasp_2025: tags.owasp_2025,
+    cwe: "CWE-918",
+    references: ["OWASP-A10-2021", "OWASP-A01-2025", "CWE-918"],
+  });
+}
+
+export function dynamicCodeToFinding(d: DynamicCodeFinding, tier: Tier): Finding {
+  const tags = dualTag("A08");
+  return makeFinding({
+    id: nextId("owasp"),
+    primary_concern: "owasp-survey",
+    severity_base: d.severity,
+    severity_tier_adjusted: d.severity,
+    confidence: 0.6,
+    finding_type: d.finding_type,
+    title: `Dynamic code-execution sink (${d.sinkKind})`,
+    description: d.detail,
+    file: d.file,
+    line: d.line,
+    tier,
+    fix_class: "inline", // review-required, never auto (synthesis §3.3)
+    tool_of_record: "in-house",
+    owasp_2021: tags.owasp_2021,
+    owasp_2025: tags.owasp_2025,
+    cwe: "CWE-95",
+    references: ["OWASP-A08-2021", "CWE-95"],
   });
 }
 
