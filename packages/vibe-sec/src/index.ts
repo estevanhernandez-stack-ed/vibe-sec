@@ -187,6 +187,50 @@ export {
   type PiiLogFinding,
 } from "./detectors/crypto-pii/index.js";
 
+// Auth model (#8 — the signature concern): route inventory, admin gating,
+// tenant isolation, IDOR, session, role hardcoding, the authorization matrix.
+export {
+  scanAuthModel,
+  scanRoutes,
+  auditAdminRoutes,
+  scanSupabaseMigration,
+  scanFirestoreTenant,
+  scanQueryTenantFilter,
+  scanIdor,
+  scanSession,
+  classifySessionLibrary,
+  scanRoleHardcoding,
+  rollupRoleHardcoding,
+  buildAuthzMatrix,
+  type AuthModelScanResult,
+  type AuthModelScanOptions,
+  type Route,
+  type RouteFramework,
+  type AuthStatus,
+  type AdminFinding,
+  type TenantFinding,
+  type IdorFinding,
+  type SessionFinding,
+  type SessionLibrary,
+  type RoleHardcodeFinding,
+  type RoleHardcodeSite,
+} from "./detectors/auth-model/index.js";
+export {
+  renderMatrixMarkdown,
+  cellGlyph,
+  AUTHZ_DIMENSIONS,
+  type AuthzMatrix,
+  type MatrixRow,
+  type MatrixInputs,
+  type AuthzDimension,
+  type Cell,
+} from "./detectors/auth-model/authz-matrix.js";
+export {
+  fingerprintPlatform,
+  type Platform,
+  type FingerprintResult,
+} from "./scanner/platform-fingerprint.js";
+
 // Shared source-tree walker for the structural detectors (Phase 3).
 export {
   walkSource,
@@ -211,6 +255,12 @@ export {
   jwtToFinding,
   clientKeyLeakToFinding,
   piiLogToFinding,
+  adminToFinding,
+  tenantToFinding,
+  idorToFinding,
+  sessionToFinding,
+  roleHardcodingToFinding,
+  cve202529927ToFinding,
 } from "./detectors/to-findings.js";
 
 // CLI core (re-export for headless CI).

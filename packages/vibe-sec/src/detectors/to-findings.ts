@@ -25,6 +25,20 @@ import type { PasswordHashFinding } from "./crypto-pii/password-hashing.js";
 import type { JwtFinding } from "./crypto-pii/jwt-audit.js";
 import type { ClientKeyLeak } from "./crypto-pii/pii-inventory.js";
 import type { PiiLogFinding } from "./crypto-pii/pii-in-logs.js";
+import type { AdminFinding } from "./auth-model/admin-audit.js";
+import type { TenantFinding } from "./auth-model/tenant-isolation.js";
+import type { IdorFinding } from "./auth-model/idor.js";
+import type { SessionFinding } from "./auth-model/session.js";
+import type { RoleHardcodeFinding } from "./auth-model/role-hardcoding.js";
+import type { Cve202529927Result } from "./config-posture/cve-2025-29927.js";
+
+const PUBLIC_FACING_TIERS = new Set<Tier>([
+  "public-facing",
+  "customer-facing-saas",
+  "regulated",
+]);
+const CUSTOMER_FACING_TIERS = new Set<Tier>(["customer-facing-saas", "regulated"]);
+const IDOR_BAND1_CONFIDENCE = 0.9;
 
 let seq = 0;
 function nextId(concern: string): string {
@@ -307,5 +321,175 @@ export function piiLogToFinding(p: PiiLogFinding, tier: Tier): Finding {
     owasp_2021: "A09",
     owasp_2025: "A09",
     references: ["OWASP-A09-2021", "GDPR-Art-44"],
+  });
+}
+
+// ─── auth-model → findings (concern #8 — the signature concern) ───────────
+// A01 (Broken Access Control) / A07 (Auth Failures), no 2025 reclassification.
+
+export function adminToFinding(a: AdminFinding, tier: Tier): Finding {
+  return makeFinding({
+    id: nextId("auth"),
+    primary_concern: "auth-model",
+    secondary_concerns: ["owasp-survey"],
+    severity_base: a.severity,
+    severity_tier_adjusted: a.severity,
+    confidence: 0.85,
+    finding_type: a.finding_type,
+    surface: a.route,
+    title: a.finding_type === "admin-route-no-auth" ? "Unauthenticated admin route" : "Admin route without role gate",
+    description: a.detail,
+    file: a.file,
+    line: a.line,
+    tier,
+    fix_class: "stage", // auth-middleware/role-gate adds stage minimum, never auto
+    tool_of_record: "in-house",
+    owasp_2021: "A01",
+    owasp_2025: "A01",
+    cwe: "CWE-862",
+    test_recommendation: "behavioral test: non-admin access returns 403",
+    priority_elevation: a.severity,
+    references: ["OWASP-A01-2021", "CWE-862"],
+  });
+}
+
+export function tenantToFinding(t: TenantFinding, tier: Tier): Finding {
+  // Supabase/Firestore tenant gaps are tenant isolation — Customer-facing-critical.
+  const isRls =
+    t.finding_type === "supabase-table-without-rls" ||
+    t.finding_type === "supabase-rls-policy-true" ||
+    t.finding_type === "firestore-permissive-rule";
+  // Tier scaling: RLS gaps stay Critical at Customer-facing+; below that they're
+  // still serious but the gate is binary at Customer-facing-SaaS (spec §2.4).
+  const adjusted: Severity =
+    isRls && !CUSTOMER_FACING_TIERS.has(tier) && t.severity === "critical"
+      ? "high"
+      : t.severity;
+  return makeFinding({
+    id: nextId("auth"),
+    primary_concern: "auth-model",
+    secondary_concerns: ["owasp-survey", "config-posture"],
+    severity_base: t.severity,
+    severity_tier_adjusted: adjusted,
+    confidence: isRls ? 0.95 : 0.8,
+    finding_type: t.finding_type,
+    surface: t.subject,
+    title: `Tenant isolation: ${t.finding_type}`,
+    description: t.detail,
+    file: t.file,
+    line: t.line,
+    tier,
+    fix_class: isRls ? "stage" : "inline", // RLS as a migration; query fix inline
+    tool_of_record: "in-house",
+    owasp_2021: "A01",
+    owasp_2025: "A01",
+    cwe: "CWE-639",
+    references: ["OWASP-A01-2021", "CWE-639"],
+  });
+}
+
+/**
+ * IDOR mapper — Decision 18. Returns a Finding only when the IDOR qualifies as a
+ * Band-1 finding: confidence ≥0.9 AND tier ≥ Public-facing. Otherwise returns
+ * null (the orchestrator surfaces it as a Band-2 "worth reviewing" note instead).
+ */
+export function idorToFinding(i: IdorFinding, tier: Tier): Finding | null {
+  if (i.confidence < IDOR_BAND1_CONFIDENCE) return null;
+  if (!PUBLIC_FACING_TIERS.has(tier)) return null;
+  return makeFinding({
+    id: nextId("auth"),
+    primary_concern: "auth-model",
+    secondary_concerns: ["owasp-survey"],
+    severity_base: "high",
+    severity_tier_adjusted: "high",
+    confidence: i.confidence,
+    finding_type: i.finding_type,
+    surface: i.subject,
+    title: "Insecure direct object reference (IDOR)",
+    description: i.detail,
+    file: i.file,
+    line: i.line,
+    tier,
+    fix_class: "inline", // ownership-check insertion — always inline
+    tool_of_record: "in-house",
+    owasp_2021: "A01",
+    owasp_2025: "A01",
+    cwe: "CWE-639",
+    references: ["OWASP-A01-2021", "CWE-639"],
+  });
+}
+
+export function sessionToFinding(s: SessionFinding, tier: Tier): Finding {
+  const fixClass: FixClass =
+    s.finding_type === "jwt-in-web-storage" ? "inline" : "stage";
+  return makeFinding({
+    id: nextId("auth"),
+    primary_concern: "auth-model",
+    secondary_concerns: ["config-posture"],
+    severity_base: s.severity,
+    severity_tier_adjusted: s.severity,
+    confidence: 0.8,
+    finding_type: s.finding_type,
+    title: `Session handling: ${s.finding_type}`,
+    description: s.detail,
+    file: s.file,
+    line: s.line,
+    tier,
+    fix_class: fixClass,
+    tool_of_record: "in-house",
+    owasp_2021: "A07",
+    owasp_2025: "A07",
+    references: ["OWASP-A07-2021"],
+  });
+}
+
+export function roleHardcodingToFinding(r: RoleHardcodeFinding, tier: Tier): Finding {
+  return makeFinding({
+    id: nextId("auth"),
+    primary_concern: "auth-model",
+    secondary_concerns: ["owasp-survey"],
+    severity_base: "medium",
+    severity_tier_adjusted: "medium",
+    confidence: 0.7,
+    finding_type: r.finding_type,
+    title: `Role checks scattered across ${r.fileCount} files`,
+    description: r.detail,
+    file: r.sites[0]?.file ?? null,
+    line: r.sites[0]?.line ?? null,
+    tier,
+    fix_class: "inline", // policy-engine refactor — architectural
+    tool_of_record: "in-house",
+    owasp_2021: "A01",
+    owasp_2025: "A01",
+    references: ["OWASP-A01-2021"],
+  });
+}
+
+/**
+ * CVE-2025-29927 joint finding (Decision 6). Fires ONCE: primary=auth-model,
+ * secondaries=[dependency-cve, config-posture, owasp-survey]. Returns null when
+ * the project isn't on a vulnerable next version.
+ */
+export function cve202529927ToFinding(c: Cve202529927Result, tier: Tier): Finding | null {
+  if (!c.vulnerable) return null;
+  return makeFinding({
+    id: "auth-cve-2025-29927", // stable id — fires once, dedupes on re-run
+    primary_concern: "auth-model",
+    secondary_concerns: ["dependency-cve", "config-posture", "owasp-survey"],
+    severity_base: "critical",
+    severity_tier_adjusted: "critical",
+    confidence: 0.98,
+    finding_type: "cve-2025-29927-middleware-bypass",
+    title: "CVE-2025-29927 — Next.js middleware authorization bypass",
+    description: c.detail ?? "next is on a version vulnerable to the x-middleware-subrequest bypass.",
+    file: "package.json",
+    line: null,
+    tier,
+    fix_class: "stage", // dep bump + defense-in-depth note
+    tool_of_record: "in-house",
+    owasp_2021: "A01",
+    owasp_2025: "A01",
+    cwe: "CWE-285",
+    references: ["CVE-2025-29927", "OWASP-A01-2021", "CWE-285"],
   });
 }
