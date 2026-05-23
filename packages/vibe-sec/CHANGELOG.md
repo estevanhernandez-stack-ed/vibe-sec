@@ -3,6 +3,14 @@
 Plugin releases. The CLI has its own changelog at `../vibe-sec-cli/CHANGELOG.md`.
 Tag convention: `vibe-sec-vX.Y.Z`.
 
+## [0.6.0] — 2026-05-23 — Tier calibration (data-sensitivity promotion)
+
+The tier classifier now weights data-sensitivity per spec §2.3. An app that is deployed AND stores real user PII AND has admin roles (or multi-tenancy) promotes to `customer-facing-saas` — three *distinct* signal dimensions required, which is the over-promotion guard (a bare prototype, internal tool, or public marketing site stays put). A `tier_drift_note` logs the promotion when security signals lift the tier above the deploy-detected baseline.
+
+Validated on WeSeeYouAtTheMovies: reclassified public-facing → customer-facing-saas, crypto-pii correctly became gate-mandatory at the L3 (80%) bar, the unauthenticated-Gemini-endpoint catch held, no auth FP regression, zero crashes. 347 tests green.
+
+Known follow-up (v0.7): the self-scan signal-gathering on the fallback path is currently SKILL-guided (agent-interpreted); the inherit-from-Vibe-Test path is deterministic. Hardening the self-scan gather to deterministic TS is scoped next.
+
 ## [0.5.1] — 2026-05-23 — Dogfood fixes (real-app validation)
 
 Fixes from the WeSeeYouAtTheMovies acceptance run. FP rate dropped from ~16-25% (concentrated in auth-model, the signature concern) to near-zero, real catches retained, zero crashes across 184 real files.
