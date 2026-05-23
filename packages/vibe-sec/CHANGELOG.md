@@ -3,6 +3,19 @@
 Plugin releases. The CLI has its own changelog at `../vibe-sec-cli/CHANGELOG.md`.
 Tag convention: `vibe-sec-vX.Y.Z`.
 
+## [0.4.0] — 2026-05-23 — Phase 3: structural detectors + audit orchestration
+
+The four structural detectors land and the orchestration commands wire all ten concerns into a real audit. `/vibe-sec:audit`, `:gate`, `:posture`, and `:fix` go live.
+
+- **Crypto / PII.** Deprecated-primitive call sites, bcrypt-cost / Argon2 checks, JWT-algorithm audit (`none`/short-secret = Critical), PII schema inventory + in-logs scan, client-side key leakage.
+- **Auth model (the signature concern).** Six probes — route inventory, admin gating, tenant-isolation (the Supabase-without-RLS finding), IDOR (gated to Public-facing+ at ≥0.9 confidence), session classification, role-hardcoding — plus the authorization matrix artifact (routes × {auth-required, role-gated, ownership-enforced, RLS-applicable}).
+- **OWASP survey.** Dual 2021/2025 tagging on every finding, shallow SSRF, dynamic-code sinks (review-required, never auto).
+- **Rate limiting.** Middleware + LLM-endpoint detection; unauthenticated LLM-backed endpoint = Critical at every tier.
+- **`/vibe-sec:audit`** runs every in-scope concern into a four-band report across markdown + banner + findings.jsonl. **`:gate`** is CI-safe (exit 0/1/2 + GitHub Actions annotations). **`:fix`** routes by confidence with destructive-action overrides (secret rotation, auth-logic, JWT/session regen, auth-middleware adds, RLS/policy changes never auto). **`:posture`** reads cached state without re-scanning.
+- Fixed a gate-scoping bug: config-posture was silently dropped from the Public-facing mandatory set (the SCOPE_GRID `mandatory`/`full` labels are about denominator scope, not gate-blocking). Spec §2.4's hard-gate table is now encoded directly.
+
+290 tests green. Canary / early-access.
+
 ## [0.3.0] — 2026-05-23 — Phase 2: signal-independent detectors
 
 The four signal-independent detectors land, and `/vibe-sec:scan` + `/vibe-sec:deps` become real commands. Each detector follows the orchestration-layer contract: defer to the tool of record when present, in-house TypeScript baseline when absent.
