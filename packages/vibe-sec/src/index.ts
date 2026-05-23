@@ -254,6 +254,27 @@ export {
 // (dualTag is also re-exported by the owasp-survey index; the direct dual-tag
 //  re-export above is the canonical one — keep this one, not the index passthrough.)
 
+// Rate limiting / abuse (#7): middleware inspection, LLM-endpoint detection (the
+// LLM-burn override), platform-vs-framework recommendation, abuse monitoring.
+export {
+  scanRateLimiting,
+  scanMiddleware,
+  hasRateLimitLibrary,
+  scanLlmEndpoint,
+  detectLlmSdk,
+  detectPlatformConfig,
+  recommendationOrder,
+  scanAbuseMonitoring,
+  type RateLimitScanResult,
+  type RateLimitScanOptions,
+  type MiddlewareFinding,
+  type LlmEndpointFinding,
+  type AbuseMonitoringFinding,
+  type PlatformConfig,
+  type RecommendationOrder,
+  type DeployPlatform,
+} from "./detectors/rate-limiting/index.js";
+
 // Shared source-tree walker for the structural detectors (Phase 3).
 export {
   walkSource,
@@ -287,6 +308,10 @@ export {
   surveyToFinding,
   ssrfToFinding,
   dynamicCodeToFinding,
+  llmEndpointToFinding,
+  middlewareToFinding,
+  rateLimitAbsentToFinding,
+  abuseMonitoringToFinding,
 } from "./detectors/to-findings.js";
 
 // CLI core (re-export for headless CI).

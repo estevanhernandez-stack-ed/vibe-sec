@@ -35,6 +35,9 @@ import type { TaggedSurveyFinding } from "./owasp-survey/index.js";
 import type { SsrfFinding } from "./owasp-survey/ssrf-shallow.js";
 import type { DynamicCodeFinding } from "./owasp-survey/dynamic-code-sinks.js";
 import { dualTag } from "./owasp-survey/dual-tag.js";
+import type { LlmEndpointFinding } from "./rate-limiting/llm-endpoint.js";
+import type { MiddlewareFinding } from "./rate-limiting/middleware.js";
+import type { AbuseMonitoringFinding } from "./rate-limiting/abuse-monitoring.js";
 
 const PUBLIC_FACING_TIERS = new Set<Tier>([
   "public-facing",
@@ -571,5 +574,124 @@ export function cve202529927ToFinding(c: Cve202529927Result, tier: Tier): Findin
     owasp_2025: "A01",
     cwe: "CWE-285",
     references: ["CVE-2025-29927", "OWASP-A01-2021", "CWE-285"],
+  });
+}
+
+// ─── rate-limiting → findings (concern #7) ───────────────────────────────
+// Dual A04 (Insecure Design) + A09 (Logging Failures) tagging on rate-limit gaps.
+
+/**
+ * LLM-endpoint mapper — the one tier-override (Decision 5):
+ *   - unauthenticated LLM endpoint → Critical at EVERY tier, including Prototype.
+ *   - authenticated-but-unbounded  → tier-gated: Critical at Customer-facing+,
+ *     High at Public-facing, Low (informational) below (Conflict 1 = A).
+ */
+export function llmEndpointToFinding(l: LlmEndpointFinding, tier: Tier): Finding {
+  let severity: Severity;
+  if (l.finding_type === "llm-endpoint-unauthenticated") {
+    severity = "critical"; // the override — every tier
+  } else {
+    // authenticated but unbounded — tier-gated.
+    severity = CUSTOMER_FACING_TIERS.has(tier)
+      ? "critical"
+      : tier === "public-facing"
+        ? "high"
+        : "low";
+  }
+  return makeFinding({
+    id: nextId("rate"),
+    primary_concern: "rate-limiting",
+    secondary_concerns: ["owasp-survey"],
+    severity_base: l.finding_type === "llm-endpoint-unauthenticated" ? "critical" : "high",
+    severity_tier_adjusted: severity,
+    confidence: 0.85,
+    finding_type: l.finding_type,
+    title:
+      l.finding_type === "llm-endpoint-unauthenticated"
+        ? `Unauthenticated LLM endpoint (${l.sdk})`
+        : `Unbounded LLM endpoint — no per-user budget (${l.sdk})`,
+    description: l.detail,
+    file: l.file,
+    line: l.line,
+    tier,
+    fix_class: "inline", // LLM token-budget middleware add — architectural
+    tool_of_record: "in-house",
+    owasp_2021: "A04",
+    owasp_2025: "A04",
+    references: ["OWASP-A04-2021", "OWASP-A09-2021"],
+  });
+}
+
+export function middlewareToFinding(m: MiddlewareFinding, tier: Tier): Finding {
+  return makeFinding({
+    id: nextId("rate"),
+    primary_concern: "rate-limiting",
+    secondary_concerns: ["owasp-survey"],
+    severity_base: m.severity,
+    severity_tier_adjusted: m.severity,
+    confidence: 0.7,
+    finding_type: m.finding_type,
+    title: `Rate limiting: ${m.finding_type}`,
+    description: m.detail,
+    file: m.file,
+    line: m.line,
+    tier,
+    fix_class: m.finding_type === "in-memory-rate-limit-store" ? "stage" : "advisory",
+    tool_of_record: "in-house",
+    owasp_2021: "A04",
+    owasp_2025: "A04",
+    references: ["OWASP-A04-2021", "OWASP-A09-2021"],
+  });
+}
+
+/**
+ * Library-absence finding (project level). Tier-gated: mandatory (auth routes) at
+ * Public-facing → High; below that it's a Low signal. Returns null at Prototype
+ * (rate limiting is dropped from scope there, except the LLM override).
+ */
+export function rateLimitAbsentToFinding(tier: Tier): Finding | null {
+  if (tier === "prototype") return null;
+  const severity: Severity = PUBLIC_FACING_TIERS.has(tier) ? "high" : "low";
+  return makeFinding({
+    id: "rate-no-limiter",
+    primary_concern: "rate-limiting",
+    secondary_concerns: ["owasp-survey"],
+    severity_base: "medium",
+    severity_tier_adjusted: severity,
+    confidence: 0.75,
+    finding_type: "no-rate-limit-library",
+    title: "No rate-limit library detected",
+    description:
+      "The app exposes routes but no rate-limit library is present. Auth and abuse-prone endpoints (login, signup, password reset, anything expensive) can be hammered. Add a limiter — platform-native at Public-facing+, framework-generic below.",
+    file: null,
+    line: null,
+    tier,
+    fix_class: "stage",
+    tool_of_record: "in-house",
+    owasp_2021: "A04",
+    owasp_2025: "A04",
+    references: ["OWASP-A04-2021", "OWASP-A09-2021"],
+  });
+}
+
+export function abuseMonitoringToFinding(a: AbuseMonitoringFinding, tier: Tier): Finding {
+  return makeFinding({
+    id: nextId("rate"),
+    primary_concern: "rate-limiting",
+    secondary_concerns: ["owasp-survey"],
+    severity_base: "low",
+    severity_tier_adjusted: "low",
+    confidence: 0.6,
+    finding_type: a.finding_type,
+    title: "Rate limiting without monitoring",
+    description: a.detail,
+    file: a.file,
+    line: a.line,
+    tier,
+    fix_class: "advisory",
+    tool_of_record: "in-house",
+    owasp_2021: "A09",
+    owasp_2025: "A09",
+    references: ["OWASP-A04-2021", "OWASP-A09-2021"],
   });
 }
