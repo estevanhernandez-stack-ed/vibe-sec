@@ -140,5 +140,31 @@ export {
   type SbomFormat,
 } from "./detectors/supply-chain/sbom-detect.js";
 
+// Config posture (#5) — headers, CORS, cookies, Firebase rules, CVE-2025-29927.
+export {
+  scanConfigPosture,
+  type ConfigPostureResult,
+} from "./detectors/config-posture/index.js";
+export {
+  analyzeHeaders,
+  headerFindings,
+  type HeaderPosture,
+  type HeaderFinding,
+  type SecurityHeader,
+} from "./detectors/config-posture/headers.js";
+export { scanCors, type CorsFinding } from "./detectors/config-posture/cors.js";
+export { scanCookies, type CookieFinding } from "./detectors/config-posture/cookies.js";
+export {
+  scanFirebaseRules,
+  isFirebaseRulesFile,
+  type FirebaseRulesFinding,
+} from "./detectors/config-posture/firebase-rules.js";
+export {
+  detectCve202529927,
+  checkNextVersion,
+  parseSemVer,
+  type Cve202529927Result,
+} from "./detectors/config-posture/cve-2025-29927.js";
+
 // CLI core (re-export for headless CI).
 export { runCli, VERSION } from "./cli.js";
