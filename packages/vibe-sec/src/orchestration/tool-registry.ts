@@ -87,3 +87,12 @@ export const DEP_TOOL_CANDIDATES: readonly ToolName[] = ["osv-scanner"];
 
 /** Supply-chain SBOM-generation tool-of-record (Syft — detection only in v0.2). */
 export const SBOM_TOOL_CANDIDATES: readonly ToolName[] = ["syft"];
+
+/**
+ * Semgrep CE is the tool of record for the structural code-analysis concerns —
+ * crypto-pii (crypto rules), auth-model (authz rules), owasp-survey (the 2000+
+ * community ruleset, esp. A03 injection). When present, the detector defers the
+ * deep pattern-match to Semgrep and re-frames; when absent, it runs the in-house
+ * baseline and surfaces Semgrep as a Band-4 complement.
+ */
+export const SEMGREP_TOOL_CANDIDATES: readonly ToolName[] = ["semgrep"];

@@ -23,7 +23,7 @@ export * from "./state/audit-state.js";
 // Composition.
 export * from "./composition/vibe-test.js";
 
-// Orchestration deferral contract.
+// Orchestration deferral contract (includes the Semgrep adapter added in Phase 3).
 export * from "./orchestration/tool-registry.js";
 export * from "./orchestration/defer.js";
 
@@ -166,6 +166,36 @@ export {
   type Cve202529927Result,
 } from "./detectors/config-posture/cve-2025-29927.js";
 
+// Crypto / PII (#4) — primitives, password hashing, JWT, PII inventory, PII-in-logs.
+export {
+  scanCryptoPii,
+  scanPrimitives,
+  scanPasswordHashing,
+  scanJwt,
+  scanPiiInventory,
+  scanClientKeyLeak,
+  scanPiiInLogs,
+  type CryptoPiiScanResult,
+  type CryptoPiiScanOptions,
+  type PrimitiveFinding,
+  type PasswordHashFinding,
+  type MigrationSignal,
+  type JwtFinding,
+  type PiiField,
+  type PiiCategory,
+  type ClientKeyLeak,
+  type PiiLogFinding,
+} from "./detectors/crypto-pii/index.js";
+
+// Shared source-tree walker for the structural detectors (Phase 3).
+export {
+  walkSource,
+  listSourceFiles,
+  isSourceFile,
+  lineOf,
+  type FileScanner,
+} from "./detectors/source-walk.js";
+
 // Detector → findings.jsonl mappers (consumed by :scan / :deps / :audit).
 export {
   resetFindingIds,
@@ -176,6 +206,11 @@ export {
   actionsToFinding,
   corsToFinding,
   firebaseRulesToFinding,
+  primitiveToFinding,
+  passwordHashToFinding,
+  jwtToFinding,
+  clientKeyLeakToFinding,
+  piiLogToFinding,
 } from "./detectors/to-findings.js";
 
 // CLI core (re-export for headless CI).

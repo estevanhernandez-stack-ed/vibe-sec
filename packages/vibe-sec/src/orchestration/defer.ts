@@ -152,6 +152,91 @@ export function deferToTrufflehog(
   return { tool: "trufflehog", findings: parseTrufflehogJsonl(out) };
 }
 
+// ─── Semgrep CE adapter (Phase 3 — crypto-pii / auth-model / owasp-survey) ──
+// `semgrep --json` (or scan --json) emits { results: [ { check_id, path,
+// start: { line }, extra: { severity, message, metadata } }, … ] }. Semgrep
+// severities are ERROR / WARNING / INFO — mapped to Vibe-Sec-native here. The
+// neutral SemgrepFinding shape lets the structural detectors treat a deferred
+// Semgrep result the same as their in-house finding before mapping to the schema.
+export type SemgrepSeverityRaw = "ERROR" | "WARNING" | "INFO";
+
+export interface SemgrepFinding {
+  checkId: string;
+  severity: Severity;
+  file: string;
+  line: number;
+  message: string;
+  /** OWASP tag pulled from Semgrep rule metadata when present, else null. */
+  owasp: string | null;
+}
+
+interface SemgrepRawResult {
+  check_id?: string;
+  path?: string;
+  start?: { line?: number };
+  extra?: {
+    severity?: string;
+    message?: string;
+    metadata?: { owasp?: string | string[]; cwe?: string | string[] };
+  };
+}
+
+function semgrepSeverity(raw: string | undefined): Severity {
+  switch ((raw ?? "").toUpperCase()) {
+    case "ERROR":
+      return "high";
+    case "WARNING":
+      return "medium";
+    default:
+      return "low";
+  }
+}
+
+export function parseSemgrepJson(json: string): SemgrepFinding[] {
+  let parsed: { results?: SemgrepRawResult[] };
+  try {
+    parsed = JSON.parse(json) as { results?: SemgrepRawResult[] };
+  } catch {
+    return [];
+  }
+  const results = Array.isArray(parsed.results) ? parsed.results : [];
+  return results.map((r) => {
+    const owaspMeta = r.extra?.metadata?.owasp;
+    const owasp = Array.isArray(owaspMeta) ? (owaspMeta[0] ?? null) : (owaspMeta ?? null);
+    return {
+      checkId: r.check_id ?? "semgrep-rule",
+      severity: semgrepSeverity(r.extra?.severity),
+      file: (r.path ?? "").replace(/\\/g, "/"),
+      line: r.start?.line ?? 0,
+      message: r.extra?.message ?? "Semgrep finding.",
+      owasp,
+    };
+  });
+}
+
+export interface SemgrepDeferResult {
+  tool: ToolName;
+  findings: SemgrepFinding[];
+}
+
+/**
+ * Defer a structural concern to Semgrep CE, scoped to a config (e.g. the
+ * "p/owasp-top-ten" or "p/secrets" registry pack, or a concern-specific rule
+ * dir). Throws on failure so the caller can fall back to the in-house baseline.
+ */
+export function deferToSemgrep(
+  projectRoot: string,
+  config: string,
+  runner: CommandRunner = defaultCommandRunner,
+): SemgrepDeferResult {
+  const out = runner(
+    "semgrep",
+    ["--config", config, "--json", "--quiet", "--no-git-ignore", projectRoot],
+    projectRoot,
+  );
+  return { tool: "semgrep", findings: parseSemgrepJson(out) };
+}
+
 // ─── syft SBOM detection adapter (Phase 2.3, Decision 25) ────────────────
 // v0.2 is SBOM detection-only — generation defers to v0.3. This adapter probes
 // for an SBOM the project may already ship (CycloneDX / SPDX). Generation via

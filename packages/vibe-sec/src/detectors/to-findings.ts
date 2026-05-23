@@ -20,6 +20,11 @@ import type { ActionsFinding } from "./supply-chain/actions-parse.js";
 import type { PinningFinding } from "./supply-chain/index.js";
 import type { CorsFinding } from "./config-posture/cors.js";
 import type { FirebaseRulesFinding } from "./config-posture/firebase-rules.js";
+import type { PrimitiveFinding } from "./crypto-pii/primitives.js";
+import type { PasswordHashFinding } from "./crypto-pii/password-hashing.js";
+import type { JwtFinding } from "./crypto-pii/jwt-audit.js";
+import type { ClientKeyLeak } from "./crypto-pii/pii-inventory.js";
+import type { PiiLogFinding } from "./crypto-pii/pii-in-logs.js";
 
 let seq = 0;
 function nextId(concern: string): string {
@@ -184,5 +189,123 @@ export function firebaseRulesToFinding(f: FirebaseRulesFinding, tier: Tier): Fin
     owasp_2021: "A01",
     owasp_2025: "A01",
     references: ["OWASP-A01-2021"],
+  });
+}
+
+// ─── crypto / PII → findings (concern #4) ────────────────────────────────
+// Crypto findings tag A02-2021 (Cryptographic Failures), reclassified A04-2025.
+
+export function primitiveToFinding(p: PrimitiveFinding, tier: Tier): Finding {
+  return makeFinding({
+    id: nextId("crypto"),
+    primary_concern: "crypto-pii",
+    severity_base: p.severity,
+    severity_tier_adjusted: p.severity,
+    confidence: p.finding_type === "weak-hash-primitive" ? 0.8 : 0.9,
+    finding_type: p.finding_type,
+    title: `Weak crypto primitive: ${p.primitive}`,
+    description: p.detail,
+    file: p.file,
+    line: p.line,
+    tier,
+    fix_class: "stage",
+    tool_of_record: "in-house",
+    owasp_2021: "A02",
+    owasp_2025: "A04",
+    references: ["OWASP-A02-2021", "OWASP-A04-2025"],
+  });
+}
+
+export function passwordHashToFinding(p: PasswordHashFinding, tier: Tier): Finding {
+  // bcrypt cost-12 migration changes stored hashes → never auto.
+  const fixClass: FixClass =
+    p.finding_type === "plaintext-password-compare" ? "inline" : "stage";
+  return makeFinding({
+    id: nextId("crypto"),
+    primary_concern: "crypto-pii",
+    severity_base: p.severity,
+    severity_tier_adjusted: p.severity,
+    confidence: 0.85,
+    finding_type: p.finding_type,
+    title: `Password hashing: ${p.finding_type}`,
+    description: p.detail,
+    file: p.file,
+    line: p.line,
+    tier,
+    fix_class: fixClass,
+    tool_of_record: "in-house",
+    owasp_2021: "A02",
+    owasp_2025: "A04",
+    references: ["OWASP-A02-2021", "OWASP-A04-2025"],
+  });
+}
+
+export function jwtToFinding(j: JwtFinding, tier: Tier): Finding {
+  // Adding an algorithms: constraint is auto-safe; secret regen is never auto.
+  const fixClass: FixClass =
+    j.finding_type === "jwt-verify-missing-algorithms" ? "auto" : "inline";
+  return makeFinding({
+    id: nextId("crypto"),
+    primary_concern: "crypto-pii",
+    secondary_concerns: ["auth-model"],
+    severity_base: j.severity,
+    severity_tier_adjusted: j.severity,
+    confidence: 0.9,
+    finding_type: j.finding_type,
+    title: `JWT: ${j.finding_type}`,
+    description: j.detail,
+    file: j.file,
+    line: j.line,
+    tier,
+    fix_class: fixClass,
+    tool_of_record: "in-house",
+    owasp_2021: "A02",
+    owasp_2025: "A04",
+    references: ["OWASP-A02-2021", "CWE-347"],
+  });
+}
+
+export function clientKeyLeakToFinding(c: ClientKeyLeak, tier: Tier): Finding {
+  return makeFinding({
+    id: nextId("crypto"),
+    primary_concern: "crypto-pii",
+    secondary_concerns: ["secret-detection"],
+    severity_base: c.severity,
+    severity_tier_adjusted: c.severity,
+    confidence: 0.75,
+    finding_type: c.finding_type,
+    title: `Client-bundle key leak: ${c.variable}`,
+    description: c.detail,
+    file: c.file,
+    line: c.line,
+    tier,
+    fix_class: "inline", // rename + rotate — never auto
+    tool_of_record: "in-house",
+    owasp_2021: "A02",
+    owasp_2025: "A04",
+    references: ["OWASP-A02-2021"],
+  });
+}
+
+export function piiLogToFinding(p: PiiLogFinding, tier: Tier): Finding {
+  // PII-in-logs is dual-tagged A09 (logging failures) by the survey concern.
+  return makeFinding({
+    id: nextId("crypto"),
+    primary_concern: "crypto-pii",
+    secondary_concerns: ["owasp-survey"],
+    severity_base: p.severity,
+    severity_tier_adjusted: p.severity,
+    confidence: 0.7,
+    finding_type: p.finding_type,
+    title: `PII in logs (${p.piiHint}) → ${p.sink}`,
+    description: p.detail,
+    file: p.file,
+    line: p.line,
+    tier,
+    fix_class: "inline",
+    tool_of_record: "in-house",
+    owasp_2021: "A09",
+    owasp_2025: "A09",
+    references: ["OWASP-A09-2021", "GDPR-Art-44"],
   });
 }
