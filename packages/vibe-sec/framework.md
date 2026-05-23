@@ -10,9 +10,11 @@
 
 ### The Core Claim
 
-**Vibe-coded applications ship with a predictable, classifiable set of security gaps — and an AI plugin that understands those patterns can close most of them faster than a human security review, without slowing down the builder.**
+**Vibe-coded applications ship with a predictable, classifiable set of security gaps — and an AI plugin that orchestrates the right scanners, classifies what they find against the app's risk tier, and routes fixes can close most of those gaps faster than a human security review, without slowing down the builder.**
 
 The security posture of a vibe-coded app is not random. It's patterned. The same LLM behaviors that make AI-assisted prototyping fast — defaulting to permissive configurations, skipping auth edge cases, hardcoding secrets for convenience, trusting user input because the prompt didn't say not to — produce a recognizable fingerprint of vulnerabilities. A plugin that knows this fingerprint can scan for it, prioritize what matters, and generate fixes that fit the app's actual architecture.
+
+Vibe Sec does not try to out-scan gitleaks, Semgrep, or OSV-Scanner. Those tools are free, mature, and better at raw detection than anything worth rebuilding. The plugin orchestrates them when they're present on the system, falls back to an in-house baseline only when they're absent, and adds the layer they all lack: tier-aware classification, severity calibration, a four-band report that respects builder fatigue, and confidence-routed fixes. The differentiator is the layer, not the detector.
 
 ### Why Vibe-Coded Apps Are Predictably Insecure
 
@@ -56,12 +58,15 @@ This layer is where the plugin needs the human. It can *propose* a threat model 
 
 Absolute security is a myth. The relevant question is always "secure enough for what?" Vibe Sec doesn't pretend otherwise. The plugin classifies the app and its deployment context, then measures against a tier-appropriate bar.
 
-- **Prototype / internal tool**: Secrets out of source, basic auth works, no known CVEs in dependencies. That's the bar. Move on.
-- **Public-facing, non-regulated**: Full hygiene layer, architectural auth review, dependency audit, security headers, input validation on all user-facing endpoints.
-- **Regulated / sensitive data**: Everything above plus threat model, data flow mapping, encryption at rest and in transit verification, audit logging, compliance-specific checks (HIPAA, SOC 2, PCI DSS mapping).
-- **Enterprise / multi-tenant**: Everything above plus tenant isolation verification, RBAC audit, API rate limiting, infrastructure-level security review.
+The tier bars aren't numbers Vibe Sec invented. Each maps to OWASP **Application Security Verification Standard (ASVS)** levels, so "secure enough" resolves to a known-quantity target a builder can hand to an auditor or a customer instead of a self-chosen threshold.
 
-The plugin tells you which tier your app needs and what's missing for that tier. Not what's missing for perfection — what's missing for *your situation*.
+- **Prototype / hackathon**: No formal verification floor. Secrets out of source, basic auth works, no known CVEs in dependencies. That's the bar. Move on.
+- **Internal tool**: **OWASP ASVS L1.** Reduced surface area; the opportunistic-attacker baseline.
+- **Public-facing, non-regulated**: **OWASP ASVS L2.** Full hygiene layer, architectural auth review, dependency audit, security headers, input validation on all user-facing endpoints.
+- **Customer-facing SaaS**: **OWASP ASVS L3.** Everything above plus tenant isolation verification, RBAC audit, API rate limiting.
+- **Regulated / enterprise**: **OWASP ASVS L3 + NIST SSDF practices + SBOM.** Everything above plus threat model, data flow mapping, encryption at rest and in transit verification, audit logging, an SBOM (Syft passthrough), and compliance-specific mapping (HIPAA, SOC 2, PCI DSS).
+
+The plugin tells you which tier your app needs and what's missing for that tier — cited against ASVS so the gap is defensible by reference, not aspirational. Not what's missing for perfection — what's missing for *your situation*.
 
 ---
 
@@ -69,7 +74,7 @@ The plugin tells you which tier your app needs and what's missing for that tier.
 
 ### Signal Categories
 
-Vibe Sec's scanner looks for specific signal families. Each maps to a security domain.
+Vibe Sec orchestrates detection across specific signal families. Each maps to a security domain — and to a tool of record. Where a mature free scanner already owns a family (gitleaks for secrets, OSV-Scanner for dependency CVEs, Semgrep CE for injection and authz), Vibe Sec defers to it, parses its output, and re-classifies the findings against the app's tier. Only when that tool is absent does the in-house baseline run. Either way, the classification, severity calibration, and fix routing on top are Vibe Sec's.
 
 #### Secrets & Credentials
 - Hardcoded API keys, tokens, passwords in source files
@@ -123,6 +128,17 @@ Vibe Sec's scanner looks for specific signal families. Each maps to a security d
 - Docker security (running as root, secrets in images)
 - CI/CD pipeline security (secret management, artifact integrity)
 - Environment separation (dev/staging/prod isolation)
+
+### OWASP Top 10 — what static analysis actually delivers
+
+Vibe Sec ships all ten OWASP categories, but coverage depth is not uniform — and saying otherwise wouldn't survive a security-minded builder kicking the tires. The honest breakdown:
+
+- **A01–A03, A05–A08** — **static-analysis depth.** Broken access control, crypto failures, injection, misconfiguration, vulnerable components, auth failures, and software/data integrity all get real detection (own detectors plus Semgrep CE for deep injection when present).
+- **A04 Insecure Design** — **surfaced via the threat model (Layer 3), not statically detected.** Insecure design is a reasoning gap, not a code pattern; the plugin facilitates the threat-modeling that exposes it rather than claiming to catch it in a scan.
+- **A09 Logging Failures** — **advisory plus PII-in-logs detection only.** No runtime instrumentation; the plugin can flag a `console.log` leaking a request body, not whether your production logging is adequate.
+- **A10 SSRF** — **shallow pattern-match for known APIs.** Deep flow-analysis needs CodeQL-grade tooling and is deferred to v0.3.
+
+The pattern: where static analysis is the right instrument, Vibe Sec goes deep. Where the real work is human adversarial reasoning (A04) or runtime behavior (A09), it surfaces hot spots and routes you to the layer that can — it doesn't claim autonomous detection it can't back up.
 
 ### Classification-Driven Prioritization
 
@@ -322,15 +338,17 @@ vibe-sec check --strict    # Fail on any finding
 
 ### What Vibe Sec IS
 
-- A security scanner that understands vibe-coded app patterns
+- An orchestration layer over the established free scanners — defers to gitleaks, Semgrep CE, and OSV-Scanner when present, runs an in-house baseline only when they're absent
+- A classifier that tailors security requirements to app type and deployment context, mapped to OWASP ASVS levels
 - A fix generator that produces actionable, architecture-aware remediation
-- A classifier that tailors security requirements to app type and deployment context
 - A threat modeling guide that helps builders think about adversaries
 - A CI gate that enforces tier-appropriate security standards
 - A learning tool that remembers your security context and habits
 
 ### What Vibe Sec IS NOT
 
+- A replacement for the scanners it orchestrates — it doesn't try to out-detect gitleaks, Semgrep, or OSV-Scanner; it adds the layer on top
+- A claimant of uniform OWASP Top 10 coverage — A01–A03 / A05–A08 get static-analysis depth, A04 surfaces via threat modeling, A09 is advisory + PII-in-logs, A10 is a shallow pattern-match (deep flow-analysis is v0.3)
 - A penetration testing tool (it doesn't actively exploit)
 - A WAF or runtime security solution (it's static analysis + guided fixes)
 - A compliance certification tool (it maps to frameworks but doesn't certify)
