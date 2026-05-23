@@ -187,3 +187,93 @@ export function readFindingsDeduped(projectRoot: string, app?: string): Finding[
   }
   return [...byId.values()];
 }
+
+/**
+ * Canonicalize a finding's file path so the SAME physical file scanned via
+ * multiple package roots collapses to one identity. In a multi-package repo with
+ * no root package.json the manifest-rooted detectors run once per sub-root, so
+ * the same file surfaces as `functions/src/games/quiz.js` from the repo root and
+ * `src/games/quiz.js` from the `functions/` root — different strings, different
+ * finding ids, so id-dedup misses them (WSYATM dogfood §5, 2026-05-23).
+ *
+ * Normalization rule: lowercase, forward-slashes, strip a leading `./`. The
+ * dedup key then pairs the path's basename-anchored tail with line + concern +
+ * finding_type, and treats two findings as duplicates when one path is a suffix
+ * of the other (same tail) at the same line for the same finding.
+ */
+export function normalizePath(file: string | null): string {
+  if (!file) return "";
+  return file.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
+}
+
+/**
+ * De-dupe findings by canonical LOCATION + concern + finding_type, collapsing
+ * the multi-root duplicate artifact. Two findings collide when they share
+ * line + primary_concern + finding_type AND their normalized paths are
+ * suffix-equal (one ends with the other, on a path-segment boundary) — i.e. the
+ * same file reached via different package-root prefixes. The finding with the
+ * LONGER (more-qualified) path wins, since it carries the full repo-relative
+ * location. Findings with no file (file === null) are keyed by concern + type +
+ * title so a project-level advisory still dedupes but distinct ones survive.
+ *
+ * Run this AFTER assembling findings from every root and BEFORE scoring /
+ * banding, so a file scanned via multiple roots yields exactly one finding.
+ */
+export function dedupeByLocation(findings: readonly Finding[]): Finding[] {
+  const fileBased: Finding[] = [];
+  const out: Finding[] = [];
+  const noFileSeen = new Map<string, Finding>();
+
+  for (const f of findings) {
+    if (f.file == null) {
+      const key = `${f.primary_concern}|${f.finding_type}|${f.title}`;
+      if (!noFileSeen.has(key)) {
+        noFileSeen.set(key, f);
+        out.push(f);
+      }
+      continue;
+    }
+    fileBased.push(f);
+  }
+
+  // Group file-based findings by (line, concern, finding_type); within a group,
+  // collapse entries whose normalized paths are suffix-equal, keeping the longest.
+  const kept: Finding[] = [];
+  const groups = new Map<string, Finding[]>();
+  for (const f of fileBased) {
+    const key = `${f.line ?? "-"}|${f.primary_concern}|${f.finding_type}`;
+    const arr = groups.get(key) ?? [];
+    arr.push(f);
+    groups.set(key, arr);
+  }
+
+  const suffixEqual = (a: string, b: string): boolean => {
+    if (a === b) return true;
+    const [longer, shorter] = a.length >= b.length ? [a, b] : [b, a];
+    if (!longer.endsWith(shorter)) return false;
+    // Require a path-segment boundary so "foo/bar.js" doesn't match "obar.js".
+    const boundaryChar = longer[longer.length - shorter.length - 1];
+    return boundaryChar === "/";
+  };
+
+  for (const arr of groups.values()) {
+    const survivors: Finding[] = [];
+    for (const f of arr) {
+      const fp = normalizePath(f.file);
+      const dupIdx = survivors.findIndex((s) => suffixEqual(normalizePath(s.file), fp));
+      if (dupIdx === -1) {
+        survivors.push(f);
+      } else {
+        // Keep the one with the longer (more-qualified) normalized path.
+        const existing = survivors[dupIdx]!;
+        if (normalizePath(f.file).length > normalizePath(existing.file).length) {
+          survivors[dupIdx] = f;
+        }
+      }
+    }
+    kept.push(...survivors);
+  }
+
+  out.push(...kept);
+  return out;
+}

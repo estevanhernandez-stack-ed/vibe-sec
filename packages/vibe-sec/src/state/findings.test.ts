@@ -9,6 +9,8 @@ import {
   readFindingsDeduped,
   validateFinding,
   makeFinding,
+  dedupeByLocation,
+  normalizePath,
   type Finding,
 } from "./findings.js";
 import { findingsPath } from "./paths.js";
@@ -98,5 +100,76 @@ describe("findings.jsonl writer + reader", () => {
   it("appendFindings writes many in one call", () => {
     appendFindings(tmp, [fixtureFinding("a"), fixtureFinding("b"), fixtureFinding("c")]);
     expect(readFindings(tmp)).toHaveLength(3);
+  });
+});
+
+// ─── Regression: multi-root path-normalized de-dupe (Fix 4, WSYATM dogfood) ──
+// In a multi-package repo with no root package.json, a file scanned via the repo
+// root AND a sub-root surfaces with different relative prefixes + different ids,
+// so id-dedup misses it. dedupeByLocation collapses by canonical location.
+describe("dedupeByLocation — multi-root duplicate collapse (regression)", () => {
+  it("normalizePath lowercases, forward-slashes, strips leading ./", () => {
+    expect(normalizePath("Functions\\Src\\Quiz.JS")).toBe("functions/src/quiz.js");
+    expect(normalizePath("./src/a.ts")).toBe("src/a.ts");
+    expect(normalizePath(null)).toBe("");
+  });
+
+  it("collapses the same file reached via two package roots into one finding", () => {
+    // Same physical quiz.js: full repo-relative path vs functions/-root-relative.
+    const a = fixtureFinding("rl-001", {
+      primary_concern: "rate-limiting",
+      finding_type: "llm-endpoint-unauthenticated",
+      file: "functions/src/games/quiz.js",
+      line: 208,
+    });
+    const b = fixtureFinding("rl-002", {
+      primary_concern: "rate-limiting",
+      finding_type: "llm-endpoint-unauthenticated",
+      file: "src/games/quiz.js",
+      line: 208,
+    });
+    const deduped = dedupeByLocation([a, b]);
+    expect(deduped).toHaveLength(1);
+    // The longer (more-qualified) path wins.
+    expect(deduped[0]!.file).toBe("functions/src/games/quiz.js");
+  });
+
+  it("keeps DISTINCT files with the same basename apart", () => {
+    const a = fixtureFinding("rl-001", { file: "functions/quiz.js", line: 1 });
+    const b = fixtureFinding("rl-002", { file: "backend/quiz.js", line: 1 });
+    // Neither path is a suffix of the other → both survive.
+    expect(dedupeByLocation([a, b])).toHaveLength(2);
+  });
+
+  it("keeps different lines / concerns / types apart", () => {
+    const base = { file: "functions/src/games/quiz.js", primary_concern: "rate-limiting" as const };
+    const a = fixtureFinding("x1", { ...base, finding_type: "llm-endpoint-unauthenticated", line: 208 });
+    const b = fixtureFinding("x2", { ...base, finding_type: "llm-endpoint-unauthenticated", line: 999 });
+    const c = fixtureFinding("x3", { ...base, finding_type: "other-thing", line: 208 });
+    expect(dedupeByLocation([a, b, c])).toHaveLength(3);
+  });
+
+  it("collapses duplicate file===null advisories by concern+type+title", () => {
+    const a = fixtureFinding("d1", {
+      primary_concern: "dependency-cve",
+      finding_type: "dependency-scan-not-performed",
+      title: "scan not performed",
+      file: null,
+    });
+    const b = fixtureFinding("d2", {
+      primary_concern: "dependency-cve",
+      finding_type: "dependency-scan-not-performed",
+      title: "scan not performed",
+      file: null,
+    });
+    expect(dedupeByLocation([a, b])).toHaveLength(1);
+  });
+
+  it("does not collapse a partial-segment suffix match (foo.js vs ofoo.js)", () => {
+    const a = fixtureFinding("p1", { file: "a/foo.js", line: 1 });
+    const b = fixtureFinding("p2", { file: "ofoo.js", line: 1 });
+    // "a/foo.js" ends with "foo.js" but boundary check uses ofoo.js vs foo.js:
+    // "ofoo.js" does not end on a "/" boundary relative to "a/foo.js" tail.
+    expect(dedupeByLocation([a, b])).toHaveLength(2);
   });
 });
