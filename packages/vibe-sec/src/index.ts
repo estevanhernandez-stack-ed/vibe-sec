@@ -102,5 +102,43 @@ export {
 export { mergeDepFindings, type MergedDepFinding } from "./detectors/deps/dedupe.js";
 export { classifyProject, type ProjectKind } from "./detectors/deps/app-lib-classifier.js";
 
+// Supply-chain hardening (#6) — integrity, pinning, actions, typosquat, SBOM.
+export {
+  scanSupplyChain,
+  checkLockfileIntegrity,
+  type SupplyChainScanResult,
+  type SupplyChainScanOptions,
+  type LockfileIntegrityResult,
+  type PinningFinding,
+} from "./detectors/supply-chain/index.js";
+export {
+  parseWorkflowText,
+  parseWorkflows,
+  findActionsIssues,
+  classifyRef,
+  type ActionUse,
+  type WorkflowParse,
+  type ActionsFinding,
+  type RefStyle,
+} from "./detectors/supply-chain/actions-parse.js";
+export {
+  levenshtein,
+  findTyposquats,
+  findDepConfusion,
+  POPULAR_PACKAGES,
+  type TyposquatFinding,
+  type DepConfusionFinding,
+} from "./detectors/supply-chain/typosquat.js";
+export {
+  scanPostinstall,
+  type PostinstallFinding,
+  type PostinstallScanResult,
+} from "./detectors/supply-chain/postinstall.js";
+export {
+  detectSbom,
+  type SbomDetectResult,
+  type SbomFormat,
+} from "./detectors/supply-chain/sbom-detect.js";
+
 // CLI core (re-export for headless CI).
 export { runCli, VERSION } from "./cli.js";
