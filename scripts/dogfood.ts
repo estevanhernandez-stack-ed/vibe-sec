@@ -129,23 +129,96 @@ function gatherSignals(roots: readonly string[]): RepoSignal[] {
       }
     });
 
-  // Deploy / hosting config → it ships somewhere → public-facing minimum.
+  // — Data-sensitivity dimensions feed the compound customer-facing-saas rule —
+  // (spec §2.3): deploy + persistent-user-data + admin-role together = real
+  // user-data-at-stake → customer-facing-saas. Any one leg alone does not
+  // promote (precision guard).
+
+  // (a) Deploy / hosting config → it ships somewhere → public-facing minimum.
   if (exists("firebase.json") || exists("vercel.json") || exists("netlify.toml"))
-    add({ name: "deploy config present", weight: "strong", promotes: "public-facing" });
-  // Auth + multi-user (Firebase auth, role checks) → customer-facing SaaS signal.
+    add({
+      name: "deploy config present",
+      weight: "strong",
+      promotes: "public-facing",
+      dimension: "deploy",
+    });
+  // Auth + multi-user (Firebase auth, Clerk, Supabase) → public-facing signal.
   if (anyPkgHasDep(/firebase|@clerk\/|next-auth|@supabase\//))
     add({ name: "auth/identity dependency", weight: "medium", promotes: "public-facing" });
-  // A real backend with user accounts + roles → customer-facing.
+  // (b) Persistent user data — security rules that gate real user collections
+  // are evidence of persisted, access-controlled user records (PII at rest).
   if (exists("firestore.rules") || exists("storage.rules"))
-    add({ name: "Firestore/Storage security rules", weight: "medium", promotes: "public-facing" });
-  // Server / Cloud Functions backend.
+    add({
+      name: "Firestore/Storage security rules",
+      weight: "medium",
+      promotes: "public-facing",
+      dimension: "persistent-user-data",
+    });
+  // Server / Cloud Functions backend → public-facing signal.
   if (exists("functions") || exists("Backend") || anyPkgHasDep(/express|fastify|firebase-functions/))
     add({ name: "server-side backend", weight: "medium", promotes: "public-facing" });
-  // Stores user PII / accounts (Firestore users collection is in CLAUDE.md). Treat
-  // identity + persisted user data as a customer-facing-SaaS push.
+  // (b) Persistent user data — firebase-admin is server-side privileged access
+  // to the user datastore (writes user records, custom claims). Strong evidence
+  // of real persisted user PII, not a static marketing site.
   if (anyPkgHasDep(/firebase-admin/))
-    add({ name: "firebase-admin (server-side user data)", weight: "medium", promotes: "customer-facing-saas" });
+    add({
+      name: "firebase-admin (server-side user data)",
+      weight: "medium",
+      promotes: "public-facing",
+      dimension: "persistent-user-data",
+    });
+  // (c) Admin-role surface — an admin/role-gate in the auth model means other
+  // people's data is administered. Detected via role-check helpers in source
+  // (checkAdminRole / requireAdmin / isAdmin / role === 'admin') or an `admin`
+  // claim in the security rules. This is the third leg of the compound rule.
+  if (hasAdminRoleSurface(roots))
+    add({
+      name: "admin-role surface (role-gated administration)",
+      weight: "medium",
+      promotes: "public-facing",
+      dimension: "admin-role",
+    });
   return signals;
+}
+
+// Admin-role detection for the compound customer-facing-saas rule. Scans source
+// + security-rules text for the canonical admin/role-gate shapes. Deliberately
+// conservative: a single hit is enough (the compound rule still requires deploy
+// + persistent-user-data alongside it), but the patterns are admin-specific so a
+// prototype with no roles stays put. Bounded walk; skips node_modules/.git/dist.
+const ADMIN_ROLE_RE =
+  /\b(?:checkAdminRole|requireAdmin|isAdmin|ensureAdmin|adminOnly|checkManagerRole|requireRole|hasRole)\b|role\s*===?\s*['"]admin['"]|['"]admin['"]\s*===?\s*role|roles?\s*\.\s*includes\s*\(\s*['"]admin['"]|\bcustom(?:User)?Claims?\b.*\badmin\b|request\.auth\.token\.admin/i;
+const ADMIN_SCAN_SKIP = /^(node_modules|\.git|dist|build|coverage|\.next|out)$/;
+const ADMIN_SCAN_EXT = /\.(?:[cm]?[jt]sx?|rules)$/;
+function hasAdminRoleSurface(roots: readonly string[]): boolean {
+  const visited = new Set<string>();
+  const walk = (dir: string, depth: number): boolean => {
+    if (depth > 6) return false;
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return false;
+    }
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        if (ADMIN_SCAN_SKIP.test(e.name)) continue;
+        const full = path.join(dir, e.name);
+        if (visited.has(full)) continue;
+        visited.add(full);
+        if (walk(full, depth + 1)) return true;
+      } else if (ADMIN_SCAN_EXT.test(e.name)) {
+        try {
+          const txt = fs.readFileSync(path.join(dir, e.name), "utf8");
+          if (ADMIN_ROLE_RE.test(txt)) return true;
+        } catch {
+          /* unreadable — skip */
+        }
+      }
+    }
+    return false;
+  };
+  return roots.some((r) => walk(r, 0));
 }
 
 const signals = gatherSignals(pkgRoots);
@@ -341,6 +414,10 @@ const summary = {
     tier,
     confidence: classification.confidence,
     source: classification.source,
+    // The tier_drift_note beacon: populated when a security signal promotes the
+    // tier above the deploy-detected baseline (spec §2.3). Builder-visible proof
+    // that the promotion is logged, not silent.
+    tierDriftNote: classification.tierDriftNote,
     rationale: classification.rationale,
     signals: signals.map((s) => `${s.name} (${s.weight} → ${s.promotes})`),
   },
