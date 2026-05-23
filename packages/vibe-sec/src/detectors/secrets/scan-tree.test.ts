@@ -88,3 +88,67 @@ describe("Layer A secret detection", () => {
     expect(maskMatch("abcdefghijklmnop")).toBe("abcdef…mnop");
   });
 });
+
+// ─── Regression: Firebase web API keys are public-by-design (WSYATM dogfood) ─
+// An AIza… web key in a firebase config object was double-tagged: GOOGLE_API_KEY
+// (high) AND FIREBASE_WEB_API_KEY (low). Per Decision 21 / spec §4.2 it must be a
+// SINGLE informational/low tag routed to the rules companion — never a high
+// secret, never double-counted. Server keys / private keys keep their severity.
+describe("Firebase web API key classification (regression)", () => {
+  // Build the AIza… literal by concatenation so this file doesn't trip scanners.
+  const FIREBASE_WEB_KEY = "AIza" + "Sy" + "A".repeat(33); // AIza + 35 chars
+
+  it("tags an apiKey: 'AIza…' web key as informational FIREBASE_WEB_API_KEY only", () => {
+    const cfg = `const firebaseConfig = { apiKey: "${FIREBASE_WEB_KEY}", projectId: "demo" };`;
+    const findings = scanText(cfg, "src/firebase.ts");
+    const fb = findings.filter((f) => f.pattern === "FIREBASE_WEB_API_KEY");
+    const google = findings.filter((f) => f.pattern === "GOOGLE_API_KEY");
+    expect(fb.length).toBe(1);
+    expect(fb[0]!.informational).toBe(true);
+    expect(fb[0]!.companion).toBe("config-posture");
+    expect(fb[0]!.severity).toBe("low");
+    // The GOOGLE_API_KEY double-tag on the SAME literal/line must be suppressed.
+    expect(google.length).toBe(0);
+  });
+
+  it("recognizes the env-fallback form: apiKey: import.meta.env.X || 'AIza…'", () => {
+    const cfg = `apiKey: import.meta.env.VITE_CONTENT_DB_API_KEY || "${FIREBASE_WEB_KEY}",`;
+    const findings = scanText(cfg, "src/contentDb/firebase.ts");
+    expect(findings.filter((f) => f.pattern === "FIREBASE_WEB_API_KEY").length).toBe(1);
+    expect(findings.filter((f) => f.pattern === "GOOGLE_API_KEY").length).toBe(0);
+  });
+
+  it("recognizes a VITE_FIREBASE_API_KEY=AIza… env assignment as a web key", () => {
+    const env = `VITE_FIREBASE_API_KEY=${FIREBASE_WEB_KEY}`;
+    const findings = scanText(env, "frontend/.env");
+    expect(findings.filter((f) => f.pattern === "FIREBASE_WEB_API_KEY").length).toBe(1);
+    expect(findings.filter((f) => f.pattern === "GOOGLE_API_KEY").length).toBe(0);
+  });
+
+  it("keeps a server GEMINI_API_KEY=AIza… at GOOGLE_API_KEY high (NOT downgraded)", () => {
+    // Server-side Gemini key — billable, genuinely sensitive, not public-by-design.
+    const env = `GEMINI_API_KEY=${FIREBASE_WEB_KEY}`;
+    const findings = scanText(env, "functions/.env");
+    expect(findings.filter((f) => f.pattern === "GOOGLE_API_KEY").length).toBe(1);
+    expect(findings.find((f) => f.pattern === "GOOGLE_API_KEY")!.severity).toBe("high");
+    expect(findings.some((f) => f.pattern === "FIREBASE_WEB_API_KEY")).toBe(false);
+  });
+
+  it("STILL flags a bare AIza… (non-apiKey context) as GOOGLE_API_KEY high", () => {
+    // A loose AIza… not in an apiKey assignment — could be a real server key.
+    const loose = `const k = "${FIREBASE_WEB_KEY}";`;
+    const findings = scanText(loose, "scripts/batch.sh");
+    const google = findings.filter((f) => f.pattern === "GOOGLE_API_KEY");
+    expect(google.length).toBe(1);
+    expect(google[0]!.severity).toBe("high");
+    expect(findings.some((f) => f.pattern === "FIREBASE_WEB_API_KEY")).toBe(false);
+  });
+
+  it("keeps a service-account PRIVATE KEY at critical (not downgraded)", () => {
+    const sa = `"private_key": "-----BEGIN PRIVATE KEY-----\\nMIIabc\\n-----END PRIVATE KEY-----\\n"`;
+    const findings = scanText(sa, "functions/service-account.json");
+    const pk = findings.find((f) => f.pattern === "PRIVATE_KEY_BLOCK");
+    expect(pk).toBeTruthy();
+    expect(pk!.severity).toBe("critical");
+  });
+});

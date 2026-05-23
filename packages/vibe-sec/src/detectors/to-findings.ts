@@ -15,6 +15,7 @@ import { makeFinding, type Finding } from "../state/findings.js";
 import type { Concern, Severity, Tier, FixClass } from "../types.js";
 import type { SecretFinding } from "./secrets/scan-tree.js";
 import type { MergedDepFinding } from "./deps/dedupe.js";
+import type { DepCoverageAdvisory } from "./deps/index.js";
 import type { TyposquatFinding } from "./supply-chain/typosquat.js";
 import type { ActionsFinding } from "./supply-chain/actions-parse.js";
 import type { PinningFinding } from "./supply-chain/index.js";
@@ -60,15 +61,25 @@ export function resetFindingIds(): void {
 
 // ─── secrets → findings ──────────────────────────────────────────────────
 export function secretToFinding(s: SecretFinding, tier: Tier): Finding {
-  const fixClass: FixClass = "inline"; // secret rotation is always inline
+  // Informational secrets (Decision 21 — Firebase web API key, public by design)
+  // are inform-only and route the user to a companion audit rather than acting as
+  // a rotate-this-now secret.
+  const informational = s.informational === true;
+  const fixClass: FixClass = informational ? "inform-only" : "inline";
+  const companion = s.companion as Concern | undefined;
+  const secondaryConcerns: Concern[] =
+    informational && companion ? [companion] : [];
   return makeFinding({
     id: nextId("secret"),
     primary_concern: "secret-detection",
+    secondary_concerns: secondaryConcerns,
     severity_base: s.severity,
     severity_tier_adjusted: s.severity,
-    confidence: 0.9,
+    confidence: informational ? 0.7 : 0.9,
     finding_type: s.pattern,
-    title: `Possible secret: ${s.pattern}`,
+    title: informational
+      ? `Public-by-design key: ${s.pattern}`
+      : `Possible secret: ${s.pattern}`,
     description: s.remediation,
     file: s.file,
     line: s.line,
@@ -101,6 +112,34 @@ export function depToFinding(d: MergedDepFinding, tier: Tier): Finding {
     owasp_2021: "A06",
     owasp_2025: "A06",
     references: [d.id, ...d.aliases].filter(Boolean),
+  });
+}
+
+// ─── dependency-cve coverage advisory → finding ──────────────────────────
+// When the dep scan reached no data source (no osv-scanner, no OSV.dev fetcher,
+// no npm audit), 0 findings means "couldn't look," not "clean." Surface it as
+// an inform-only low finding so a 1.0 score isn't falsely reassuring.
+export function depNotCheckedToFinding(
+  advisory: DepCoverageAdvisory,
+  tier: Tier,
+): Finding {
+  return makeFinding({
+    id: nextId("dep"),
+    primary_concern: "dependency-cve",
+    severity_base: "low",
+    severity_tier_adjusted: "low",
+    confidence: 1,
+    finding_type: advisory.finding_type,
+    title: "Dependency CVE scan not performed (no data source reached)",
+    description: advisory.detail,
+    file: null,
+    line: null,
+    tier,
+    fix_class: "inform-only",
+    tool_of_record: "in-house",
+    owasp_2021: "A06",
+    owasp_2025: "A06",
+    references: ["OWASP-A06-2021"],
   });
 }
 

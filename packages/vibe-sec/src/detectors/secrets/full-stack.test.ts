@@ -47,6 +47,21 @@ describe("expanded provider catalog (Phase 2.1)", () => {
     expect(fb?.companion).toBe("config-posture");
     expect(fb?.severity).toBe("low");
   });
+
+  it("does NOT double-count a Firebase web key across layers (one tag, low)", () => {
+    // The full stack (A regex + B entropy) would otherwise tag the same AIza…
+    // literal as FIREBASE_WEB_API_KEY (low) AND HIGH_ENTROPY_ASSIGN (medium).
+    const webKey = "AIza" + "Sy" + "B".repeat(33);
+    write("firebase.ts", `const firebaseConfig = { apiKey: "${webKey}" };`);
+    const { findings } = scanInhouseFull(tmp);
+    const onLine = findings.filter((f) => f.file === "firebase.ts");
+    expect(onLine.filter((f) => f.pattern === "FIREBASE_WEB_API_KEY").length).toBe(1);
+    expect(onLine.some((f) => f.pattern === "GOOGLE_API_KEY")).toBe(false);
+    expect(onLine.some((f) => f.pattern === "HIGH_ENTROPY_ASSIGN")).toBe(false);
+    // The single surviving secret tag is the low, public-by-design one.
+    const webTags = onLine.filter((f) => f.pattern === "FIREBASE_WEB_API_KEY");
+    expect(webTags[0]!.severity).toBe("low");
+  });
 });
 
 describe("in-house full stack — A + B + C composed", () => {

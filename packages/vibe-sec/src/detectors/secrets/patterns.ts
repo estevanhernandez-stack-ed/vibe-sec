@@ -272,8 +272,16 @@ export const SECRET_PATTERNS: readonly SecretPattern[] = [
     // Firebase web client keys look like Google API keys but are public by
     // design — informational, with a rules-audit companion (Decision 21). The
     // assignment-context form keeps this from double-firing GOOGLE_API_KEY by
-    // proximity to a firebase config object key.
-    regex: /\b(?:apiKey)\s*[:=]\s*["'](AIza[0-9A-Za-z_-]{35})["']/g,
+    // proximity to a Firebase config key. Recognized contexts (all on one line,
+    // an AIza… literal within a short window of a Firebase-web-key marker):
+    //   - `apiKey: "AIza…"`                  (direct config object assignment)
+    //   - `apiKey: import.meta.env.X || "AIza…"` (the env-fallback form)
+    //   - `VITE_FIREBASE_API_KEY=AIza…`      (Vite/CRA env var, name says firebase)
+    //   - `FIREBASE_API_KEY = "AIza…"`       (any *FIREBASE*_API_KEY env name)
+    // The capture group is the AIza… literal so the de-double-tag step can match
+    // it against the GOOGLE_API_KEY hit on the same line and drop the duplicate.
+    regex:
+      /(?:\bapiKey\s*[:=][^\n"'`]{0,80}|\b\w*FIREBASE\w*_?API_?KEY\s*[:=][^\n"'`]{0,80})["'`]?(AIza[0-9A-Za-z_-]{35})["'`]?/gi,
     severity: "low",
     informational: true,
     companion: "config-posture",

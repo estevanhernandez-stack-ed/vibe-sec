@@ -27,6 +27,13 @@ export interface SecretFinding {
   match: string;
   preview: string;
   remediation: string;
+  /**
+   * Informational-only (Decision 21): public-by-design key (Firebase web API
+   * key). Surfaced + routed to a companion audit, never a high-severity blocker.
+   */
+  informational?: boolean;
+  /** Companion concern an informational match routes an audit toward. */
+  companion?: string;
 }
 
 export interface ScanResult {
@@ -105,9 +112,18 @@ function previewAt(text: string, index: number, matchLen: number): string {
   return masked.trim().slice(0, 160);
 }
 
+// A 39-char Google/Firebase web API key literal (AIza + 35 chars).
+const AIZA_LITERAL_RE = /\bAIza[0-9A-Za-z_-]{35}\b/;
+
 /** Run the Layer A catalog over a single text blob. */
 export function scanText(text: string, filePath: string): SecretFinding[] {
   const findings: SecretFinding[] = [];
+  // Track which AIza… literals (per line) were claimed by the informational
+  // Firebase-web-key pattern, so we can suppress the high-severity GOOGLE_API_KEY
+  // double-tag on the SAME physical key (Decision 21 / spec §4.2 — a Firebase web
+  // key is one informational/low tag, never double-counted as a high secret).
+  const firebaseWebKeyLines = new Set<string>(); // `${line}:${AIzaLiteral}`
+
   for (const p of SECRET_PATTERNS) {
     // Reset lastIndex — the global regexes are reused across files.
     p.regex.lastIndex = 0;
@@ -116,6 +132,11 @@ export function scanText(text: string, filePath: string): SecretFinding[] {
       if (KNOWN_PLACEHOLDERS.has(matched)) continue;
       const idx = m.index ?? 0;
       const { line, col } = lineColumn(text, idx);
+      if (p.name === "FIREBASE_WEB_API_KEY") {
+        // m[1] is the captured AIza… literal inside the apiKey assignment.
+        const literal = m[1] ?? (matched.match(AIZA_LITERAL_RE)?.[0] ?? "");
+        if (literal) firebaseWebKeyLines.add(`${line}:${literal}`);
+      }
       findings.push({
         pattern: p.name,
         severity: downgradeForContext(p.severity, filePath),
@@ -125,9 +146,24 @@ export function scanText(text: string, filePath: string): SecretFinding[] {
         match: maskMatch(matched),
         preview: previewAt(text, idx, matched.length),
         remediation: p.remediation,
+        ...(p.informational ? { informational: true } : {}),
+        ...(p.companion ? { companion: p.companion } : {}),
       });
     }
   }
+
+  // De-double-tag: drop any GOOGLE_API_KEY finding whose AIza… literal on the
+  // same line is already tagged as a (public-by-design) Firebase web API key.
+  if (firebaseWebKeyLines.size > 0) {
+    return findings.filter((f) => {
+      if (f.pattern !== "GOOGLE_API_KEY") return true;
+      // Recover the unmasked literal from the source line to compare.
+      const lineText = text.split("\n")[f.line - 1] ?? "";
+      const literal = lineText.match(AIZA_LITERAL_RE)?.[0] ?? "";
+      return literal === "" || !firebaseWebKeyLines.has(`${f.line}:${literal}`);
+    });
+  }
+
   return findings;
 }
 
@@ -168,8 +204,22 @@ export function scanTreeWith(root: string, layers: readonly ScanLayer[]): ScanRe
       continue;
     }
     filesScanned++;
+    // Layer A first claims Firebase web keys per file; remember which (file,line)
+    // pairs hold a public-by-design web key so the entropy/generic layers don't
+    // re-flag the SAME literal as a sensitive secret (Decision 21 — one tag, no
+    // double-count across layers either).
+    const fileFirebaseWebLines = new Set<number>();
     for (const layer of layers) {
       for (const f of layer(text, rel)) {
+        if (f.pattern === "FIREBASE_WEB_API_KEY") fileFirebaseWebLines.add(f.line);
+        // Suppress entropy/generic noise that lands on a line already tagged as a
+        // public-by-design Firebase web key — it's the same harmless literal.
+        if (
+          (f.pattern === "HIGH_ENTROPY_ASSIGN" || f.pattern === "GENERIC_API_KEY_ASSIGN") &&
+          fileFirebaseWebLines.has(f.line)
+        ) {
+          continue;
+        }
         const key = findingKey(f);
         if (seen.has(key)) continue;
         seen.add(key);
