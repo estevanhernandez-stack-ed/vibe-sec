@@ -166,5 +166,17 @@ export {
   type Cve202529927Result,
 } from "./detectors/config-posture/cve-2025-29927.js";
 
+// Detector → findings.jsonl mappers (consumed by :scan / :deps / :audit).
+export {
+  resetFindingIds,
+  secretToFinding,
+  depToFinding,
+  pinningToFinding,
+  typosquatToFinding,
+  actionsToFinding,
+  corsToFinding,
+  firebaseRulesToFinding,
+} from "./detectors/to-findings.js";
+
 // CLI core (re-export for headless CI).
 export { runCli, VERSION } from "./cli.js";
