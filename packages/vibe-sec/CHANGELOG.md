@@ -3,6 +3,17 @@
 Plugin releases. The CLI has its own changelog at `../vibe-sec-cli/CHANGELOG.md`.
 Tag convention: `vibe-sec-vX.Y.Z`.
 
+## [0.5.1] — 2026-05-23 — Dogfood fixes (real-app validation)
+
+Fixes from the WeSeeYouAtTheMovies acceptance run. FP rate dropped from ~16-25% (concentrated in auth-model, the signature concern) to near-zero, real catches retained, zero crashes across 184 real files.
+
+- **auth-model:** recognize Firebase auth patterns (`verifyIdToken`/`verifyAuthToken`/`checkAdminRole` + Bearer extraction); scope auth to the handler block (not the whole file) so genuinely-unprotected handlers stay flagged while inline-protected ones clear; widen the Express detection window.
+- **secrets:** Firebase web API keys (`AIza…`, public by design) are informational + single-tagged — server keys + service-account keys stay high/critical.
+- **deps:** surface a coverage advisory when the CVE scan is a no-op (no osv-scanner / network) — an unchecked concern no longer reads as clean.
+- **state:** path-normalize + de-dupe findings across multiple package roots (monorepo walk).
+
+339 tests green (315 + 24 regression).
+
 ## [0.5.0] — 2026-05-23 — Phase 4: threat-model sink + research + SECURITY.md (full surface)
 
 The synthesis sink and the last commands land. All nine commands are now real over the ten-concern stack.
