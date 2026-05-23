@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "vibe-sec",
-      "description": "Security gap finder for vibe-coded apps — leaked secrets, sketchy auth, missing input validation, stale dependencies. Full plugin coming soon; secret-leak scanner CLI available now via @esthernandez/vibe-sec-cli.",
+      "description": "Security gap finder for vibe-coded apps — the tier-aware audit and orchestration layer that defers to gitleaks/OSV-Scanner/Semgrep when present and falls back to an in-house baseline when absent. Early access (v0.2.0 foundation): secret scan + tier classification live; the full 10-concern audit, fix engine, and threat-model land across upcoming releases.",
       "source": "./packages/vibe-sec"
     }
   ]
