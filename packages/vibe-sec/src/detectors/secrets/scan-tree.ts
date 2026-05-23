@@ -133,7 +133,29 @@ export function scanText(text: string, filePath: string): SecretFinding[] {
 
 /** Walk a directory tree and scan every text file. */
 export function scanTree(root: string): ScanResult {
+  return scanTreeWith(root, [scanText]);
+}
+
+/** A per-file layer: text + path → findings. Layers A/B/C all conform. */
+export type ScanLayer = (text: string, filePath: string) => SecretFinding[];
+
+/**
+ * Dedup key for a finding — a byte range can be matched by more than one layer
+ * (e.g. Layer A regex + Layer B entropy on the same token). Keep the first,
+ * which is the higher-precision layer when layers are ordered A→B→C.
+ */
+function findingKey(f: SecretFinding): string {
+  return `${f.file}:${f.line}:${f.column}`;
+}
+
+/**
+ * Walk a tree running an ordered list of layers per file, deduping overlapping
+ * matches by file:line:column (first layer wins). This is how the in-house
+ * fallback composes Layer A (regex) + B (entropy) + C (AST).
+ */
+export function scanTreeWith(root: string, layers: readonly ScanLayer[]): ScanResult {
   const findings: SecretFinding[] = [];
+  const seen = new Set<string>();
   let filesScanned = 0;
   const resolved = path.resolve(root);
   for (const { full, rel } of walk(resolved, resolved)) {
@@ -146,7 +168,14 @@ export function scanTree(root: string): ScanResult {
       continue;
     }
     filesScanned++;
-    findings.push(...scanText(text, rel));
+    for (const layer of layers) {
+      for (const f of layer(text, rel)) {
+        const key = findingKey(f);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        findings.push(f);
+      }
+    }
   }
   return { findings, filesScanned };
 }

@@ -27,14 +27,44 @@ export * from "./composition/vibe-test.js";
 export * from "./orchestration/tool-registry.js";
 export * from "./orchestration/defer.js";
 
-// Secret detection (Layer A + orchestration).
+// Secret detection (Layers A/B/C + history + verify + orchestration).
 export * from "./detectors/secrets/index.js";
-export { scanText, downgradeForContext, maskMatch } from "./detectors/secrets/scan-tree.js";
+export {
+  scanText,
+  scanTree,
+  scanTreeWith,
+  downgradeForContext,
+  maskMatch,
+  type ScanLayer,
+} from "./detectors/secrets/scan-tree.js";
 export type { SecretFinding, ScanResult } from "./detectors/secrets/scan-tree.js";
 export {
   SECRET_PATTERNS,
   type SecretPattern,
 } from "./detectors/secrets/patterns.js";
+export {
+  shannonEntropy,
+  isHighEntropyToken,
+  scanEntropy,
+  BASE64_ENTROPY_THRESHOLD,
+  HEX_ENTROPY_THRESHOLD,
+  MIN_TOKEN_LENGTH,
+} from "./detectors/secrets/entropy.js";
+export { scanAst, isParseable } from "./detectors/secrets/ast-walk.js";
+export {
+  scanHistory,
+  type HistorySecretFinding,
+  type GitRunner,
+  type HistoryScanResult,
+} from "./detectors/secrets/history-scan.js";
+export { verifySecrets, type VerifyResult } from "./detectors/secrets/verify.js";
+export {
+  readHistoryScanCache,
+  writeHistoryScanCache,
+  decideScanMode,
+  historyScanCachePath,
+  type HistoryScanCache,
+} from "./state/history-scan.js";
 
 // CLI core (re-export for headless CI).
 export { runCli, VERSION } from "./cli.js";
