@@ -151,3 +151,17 @@ export function deferToTrufflehog(
   const out = runner("trufflehog", ["filesystem", projectRoot, "--json"], projectRoot);
   return { tool: "trufflehog", findings: parseTrufflehogJsonl(out) };
 }
+
+// ─── syft SBOM detection adapter (Phase 2.3, Decision 25) ────────────────
+// v0.2 is SBOM detection-only — generation defers to v0.3. This adapter probes
+// for an SBOM the project may already ship (CycloneDX / SPDX). Generation via
+// `syft` is intentionally NOT invoked here; the supply-chain detector surfaces
+// Syft as a Band-4 generation complement when no SBOM is present.
+export const SBOM_FILENAMES: readonly string[] = [
+  "bom.json",
+  "sbom.json",
+  "cyclonedx.json",
+  "sbom.spdx.json",
+  "sbom.cdx.json",
+  ".sbom/bom.json",
+];

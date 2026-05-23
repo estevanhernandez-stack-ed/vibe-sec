@@ -66,5 +66,41 @@ export {
   type HistoryScanCache,
 } from "./state/history-scan.js";
 
+// Shared lockfile parser (consumed by deps #1 + supply-chain #6).
+export {
+  readLockfile,
+  readDeclaredDeps,
+  detectLockfile,
+  classifyPin,
+  type LockfileInfo,
+  type LockEntry,
+  type DeclaredDep,
+  type PinStyle,
+  type PackageManager,
+} from "./detectors/supply-chain/lockfile.js";
+
+// Dependency-CVE (#1) — OSV + npm audit + dedupe + app/lib classifier.
+export {
+  scanDependencies,
+  shouldRollbackChurn,
+  countDiffLines,
+  LOCKFILE_CHURN_LIMIT,
+  type DepScanResult,
+  type DepScanOptions,
+} from "./detectors/deps/index.js";
+export {
+  scanOsv,
+  parseOsvScannerJson,
+  cvssToSeverity,
+  type DepVulnerability,
+} from "./detectors/deps/osv-client.js";
+export {
+  parseNpmAudit,
+  runNpmAudit,
+  routeFixFromAudit,
+} from "./detectors/deps/npm-audit.js";
+export { mergeDepFindings, type MergedDepFinding } from "./detectors/deps/dedupe.js";
+export { classifyProject, type ProjectKind } from "./detectors/deps/app-lib-classifier.js";
+
 // CLI core (re-export for headless CI).
 export { runCli, VERSION } from "./cli.js";

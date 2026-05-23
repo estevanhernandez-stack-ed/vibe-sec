@@ -81,3 +81,9 @@ export const SECRET_TOOL_CANDIDATES: readonly ToolName[] = [
   "gitleaks",
   "trufflehog",
 ];
+
+/** Dependency-CVE tool-of-record priority order (OSV-Scanner primary). */
+export const DEP_TOOL_CANDIDATES: readonly ToolName[] = ["osv-scanner"];
+
+/** Supply-chain SBOM-generation tool-of-record (Syft — detection only in v0.2). */
+export const SBOM_TOOL_CANDIDATES: readonly ToolName[] = ["syft"];
