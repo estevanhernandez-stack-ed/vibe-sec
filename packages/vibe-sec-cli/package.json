@@ -1,7 +1,8 @@
 {
   "name": "@esthernandez/vibe-sec-cli",
-  "version": "0.1.1",
-  "description": "CLI secret-leak scanner for vibe-coded apps — detects API keys, tokens, and credentials leaked in source, with severity tiers and CI-safe exit codes. First shipped capability of Vibe Sec.",
+  "version": "0.6.0",
+  "description": "Headless security scanner for vibe-coded apps — tier-aware secret detection with severity tiers and CI-safe exit codes. Self-contained bundle of the Vibe Sec audit engine; defers to gitleaks/trufflehog when present, in-house Layer A/B/C fallback otherwise. Zero runtime dependencies.",
+  "type": "module",
   "author": "626Labs LLC",
   "license": "MIT",
   "homepage": "https://github.com/estevanhernandez-stack-ed/vibe-sec#readme",
@@ -12,14 +13,24 @@
     "directory": "packages/vibe-sec-cli"
   },
   "bin": {
-    "vibe-sec": "./src/index.js"
+    "vibe-sec": "./dist/cli.js"
   },
   "files": [
-    "src",
+    "dist",
     "README.md"
   ],
   "scripts": {
-    "test": "node src/index.js --help"
+    "build": "tsup",
+    "prepublishOnly": "tsup",
+    "test": "node dist/cli.js --help",
+    "clean": "rimraf dist"
+  },
+  "devDependencies": {
+    "@esthernandez/vibe-sec": "workspace:*",
+    "@types/node": "^20.14.0",
+    "rimraf": "^5.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0"
   },
   "engines": {
     "node": ">=20.0.0"

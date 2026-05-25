@@ -36,7 +36,23 @@ importers:
         specifier: ^1.6.0
         version: 1.6.1(@types/node@20.19.41)
 
-  packages/vibe-sec-cli: {}
+  packages/vibe-sec-cli:
+    devDependencies:
+      '@esthernandez/vibe-sec':
+        specifier: workspace:*
+        version: link:../vibe-sec
+      '@types/node':
+        specifier: ^20.14.0
+        version: 20.19.41
+      rimraf:
+        specifier: ^5.0.0
+        version: 5.0.10
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(postcss@8.5.15)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.4.0
+        version: 5.9.3
 
 packages:
 
