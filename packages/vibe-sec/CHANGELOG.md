@@ -3,6 +3,11 @@
 Plugin releases. The CLI has its own changelog at `../vibe-sec-cli/CHANGELOG.md`.
 Tag convention: `vibe-sec-vX.Y.Z`.
 
+## [0.7.0] — 2026-06-09 — vibe-sec-cli full tier-aware audit
+
+- **feat(cli):** `vibe-sec-cli` ships the full tier-aware audit — the standalone CLI now runs the complete ten-concern, tier-calibrated audit surface outside a Claude Code session.
+- **docs:** Vibe family cohesion standard applied to the README; license footer normalized to canonical; count-agnostic ecosystem footer (no hard-coded plugin count).
+
 ## [0.6.0] — 2026-05-23 — Tier calibration (data-sensitivity promotion)
 
 The tier classifier now weights data-sensitivity per spec §2.3. An app that is deployed AND stores real user PII AND has admin roles (or multi-tenancy) promotes to `customer-facing-saas` — three *distinct* signal dimensions required, which is the over-promotion guard (a bare prototype, internal tool, or public marketing site stays put). A `tier_drift_note` logs the promotion when security signals lift the tier above the deploy-detected baseline.
