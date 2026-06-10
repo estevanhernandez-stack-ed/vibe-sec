@@ -36,11 +36,18 @@ import {
  * are excluded. The rawPassFraction is a simple density proxy: 1.0 when clean,
  * decaying with finding count — the amplifier (driven by `severities`) is what
  * actually gates, so this proxy only needs to be monotonic + bounded.
+ *
+ * `notApplicable` (GAP-09): concerns whose applicability gate reported
+ * not-applicable this audit (e.g. data-posture with no persistence layer).
+ * They are dropped from the fold — and therefore from the score denominator —
+ * because a concern with nothing to evaluate must not count as a 1.0 pass.
  */
 export function foldConcernResults(
   findings: readonly Finding[],
   tier: Tier,
+  notApplicable: readonly Concern[] = [],
 ): ConcernResult[] {
+  const na = new Set(notApplicable);
   const byConcern = new Map<Concern, Finding[]>();
   for (const f of findings) {
     if (f.suppressed) continue;
@@ -52,6 +59,7 @@ export function foldConcernResults(
   const out: ConcernResult[] = [];
   for (const concern of ALL_CONCERNS) {
     if (!isInScope(concern, tier)) continue; // skip concerns never reach the gate
+    if (na.has(concern)) continue; // not-applicable: out of the denominator
     const fs_ = byConcern.get(concern) ?? [];
     const severities: Severity[] = fs_.map((f) => f.severity_tier_adjusted);
     // Density proxy: clean → 1.0; each finding shaves toward a 0.5 floor so the
@@ -76,10 +84,16 @@ export interface GateRunResult extends GateResult {
  * @param projectRoot the repo root
  * @param opts.tier   override the cached tier (e.g. a CI-pinned tier)
  * @param opts.githubActions emit GH Actions annotation strings
+ * @param opts.notApplicable override the cached not-applicable concern list
  */
 export function runGate(
   projectRoot: string,
-  opts: { tier?: Tier; githubActions?: boolean; app?: string } = {},
+  opts: {
+    tier?: Tier;
+    githubActions?: boolean;
+    app?: string;
+    notApplicable?: readonly Concern[];
+  } = {},
 ): GateRunResult {
   const audit = readAuditState(projectRoot, opts.app);
   const tier = opts.tier ?? audit?.tier;
@@ -101,7 +115,10 @@ export function runGate(
   }
 
   const findings = readFindingsDeduped(projectRoot, opts.app);
-  const results = foldConcernResults(findings, tier);
+  // Not-applicable concerns (GAP-09): explicit override wins, else the cached
+  // audit's record — so headless CI runs honor the applicability gate too.
+  const notApplicable = opts.notApplicable ?? audit?.not_applicable_concerns ?? [];
+  const results = foldConcernResults(findings, tier, notApplicable);
   const gate = evaluateGate(tier, results);
 
   const annotations = opts.githubActions ? buildAnnotations(gate, findings, tier) : [];

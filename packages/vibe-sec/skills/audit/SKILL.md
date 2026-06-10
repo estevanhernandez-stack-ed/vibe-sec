@@ -1,7 +1,7 @@
 ---
 name: audit
 description: >
-  Full tier-calibrated security audit across all eleven concerns. Use when the user
+  Full tier-calibrated security audit across all twelve concerns. Use when the user
   says "/vibe-sec:audit", "full security audit", "audit my app", "run a complete
   security check", "what security gaps do I have". Classifies the project tier,
   runs the in-scope concern detectors (deferring to external tools when present),
@@ -42,9 +42,10 @@ deterministic TypeScript detectors. Lead with the verdict, then the bands.
    record — defer to it when present (gitleaks, OSV-Scanner, Semgrep CE, …),
    fall back to the in-house baseline when absent, credit whichever ran.
 
-   The eleven concerns: secrets, dependency-cve, supply-chain, config-posture,
+   The twelve concerns: secrets, dependency-cve, supply-chain, config-posture,
    crypto-pii, auth-model, owasp-survey, rate-limiting, license-compliance
-   (v0.8.0), tier-thresholds (the math substrate, always on), threat-model.
+   (v0.8.0), data-posture (v0.9.0), tier-thresholds (the math substrate,
+   always on), threat-model.
 
    **license-compliance (v0.8.0, GAP-26).** Per detected package root, call
    `scanLicenses(root)` then `evaluateLicensePolicy(...)` from
@@ -59,7 +60,24 @@ deterministic TypeScript detectors. Lead with the verdict, then the bands.
    `:gate`. When node_modules is absent, surface the not-scanned advisory;
    never report clean on an uninventoried tree. Known soft spot to name in
    the report when it applies: pnpm strict layouts under-inventory
-   transitives (top-level node_modules only). **Threat-model is the sink node:**
+   transitives (top-level node_modules only).
+
+   **data-posture (v0.9.0, GAP-09 static half).** Per package root, call
+   `scanDataPosture(root, { tier })` from `src/detectors/data-posture/`; map
+   findings through `dataPostureToFinding` and surface `result.notes`
+   verbatim (the honesty cap lives there: a discovered backup config is NOT
+   a verified restore — the runtime leg belongs to vibe-ops). When the
+   applicability gate returns `applicable: false` (no real persistence),
+   write the concern into `audit.json`'s `not_applicable_concerns[]` so the
+   gate drops it from the score denominator — not-applicable is not a pass
+   and not a skip; it's a third state, declared. The two findings classes:
+   no-discoverable-backup-path (MEDIUM — "restore is untested by
+   definition") and the migration-discipline pair (no-schema-versioning LOW
+   + lazy-migration-without-backfill MEDIUM, which only fires when NO
+   completion path exists anywhere — a repo with a backfill walker stays
+   quiet however many lazy-read sites it carries). Cloud-side backup
+   schedules with zero repo footprint are invisible to a static scan — the
+   finding copy says so; do not soften it. **Threat-model is the sink node:**
    consult `threatModelInAudit(tier)` before running it. At Prototype and
    Internal it returns false (Conflict 2 = C — opt-in only); NOT auto-included in
    `:audit`. Point the user at `/vibe-sec:threat-model` if they want it at

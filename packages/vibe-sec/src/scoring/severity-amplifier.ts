@@ -3,7 +3,7 @@
 // The hard rule that forces "97% clean but one committed AWS key still fails":
 //   - any Critical finding in a concern caps that concern's pass_fraction at 0.5
 //   - any High finding caps it at 0.8
-// Applies across all eleven concerns. Lower (Medium/Low) findings don't amplify —
+// Applies across all twelve concerns. Lower (Medium/Low) findings don't amplify —
 // they only move the raw pass_fraction the detector computes.
 
 import type { Severity } from "../types.js";

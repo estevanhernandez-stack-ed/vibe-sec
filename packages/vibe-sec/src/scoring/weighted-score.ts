@@ -125,6 +125,22 @@ export const SCOPE_GRID: Record<Concern, Record<Tier, ConcernScope>> = {
     "customer-facing-saas": "full",
     regulated: "full",
   },
+  "data-posture": {
+    // GAP-09 (static half). Backup/migration obligations attach to operating
+    // on real users' data, not tinkering — prototype/internal skip entirely.
+    // Public-facing runs lightweight (backup check only); Customer-facing-SaaS
+    // and Regulated run full (backup + migration lint). Beyond this static
+    // tier grid the concern is ALSO applicability-gated at runtime: an app
+    // with no persistence layer reports not-applicable and drops out of the
+    // denominator (audit-state not_applicable_concerns → foldConcernResults).
+    // Never gate-mandatory — findings are advisory (max MEDIUM) and the
+    // restore-actually-works verification belongs to vibe-ops.
+    prototype: "skip",
+    internal: "skip",
+    "public-facing": "lightweight",
+    "customer-facing-saas": "full",
+    regulated: "full",
+  },
 };
 
 /**
@@ -197,14 +213,18 @@ const MANDATORY_BY_TIER: Record<Tier, Concern[]> = {
 export function mandatoryConcerns(tier: Tier): Concern[] {
   if (tier === "regulated") {
     // Every detector concern except the advisory threat-model, the meta
-    // tier-thresholds, and license-compliance (GAP-26: license findings route
+    // tier-thresholds, license-compliance (GAP-26: license findings route
     // to business decisions — purchase / swap / open the source / document the
-    // position — so they weigh in the score but never hard-block the gate).
+    // position — so they weigh in the score but never hard-block the gate),
+    // and data-posture (GAP-09: advisory-class findings, max MEDIUM; the
+    // restore-verification half that could justify blocking is runtime work
+    // owned by vibe-ops, so the static half never hard-blocks either).
     return ALL_CONCERNS.filter(
       (c) =>
         c !== "threat-model" &&
         c !== "tier-thresholds" &&
-        c !== "license-compliance",
+        c !== "license-compliance" &&
+        c !== "data-posture",
     );
   }
   return [...MANDATORY_BY_TIER[tier]];

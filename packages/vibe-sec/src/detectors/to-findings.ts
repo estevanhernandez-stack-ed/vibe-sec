@@ -44,6 +44,10 @@ import type {
   LicenseCoverageAdvisory,
   LicenseFindingType,
 } from "./license/index.js";
+import type {
+  DataPostureFinding,
+  DataPostureFindingType,
+} from "./data-posture/index.js";
 
 const PUBLIC_FACING_TIERS = new Set<Tier>([
   "public-facing",
@@ -780,6 +784,43 @@ export function licenseNotScannedToFinding(
     line: null,
     tier,
     fix_class: "inform-only",
+    tool_of_record: "in-house",
+    references: [],
+  });
+}
+
+// ─── data-posture → findings (concern #12, GAP-09 static half) ─────────────
+// Data-posture findings carry no OWASP tag (operational data integrity, not a
+// weakness category — same rule as license). No secondary concern is forced:
+// backup/migration discipline has no honest owner among the other eleven.
+// All three finding types are advisory; severity comes from the policy map in
+// detectors/data-posture/index.ts. Confidence is a flat 0.7 — absence claims
+// over discoverable locations plus heuristic shape detection, deliberately
+// conservative (the auth-model 0.5.1 lesson: FPs on advisory findings burn
+// trust faster than misses).
+
+const DATA_POSTURE_TITLE: Record<DataPostureFindingType, string> = {
+  "no-discoverable-backup-path":
+    "Persistent user data with no discoverable backup path",
+  "no-schema-versioning": "Persisted documents carry no schema version",
+  "lazy-migration-without-backfill":
+    "Lazy migration with no backfill/completion path",
+};
+
+export function dataPostureToFinding(d: DataPostureFinding, tier: Tier): Finding {
+  return makeFinding({
+    id: nextId("dataposture"),
+    primary_concern: "data-posture",
+    severity_base: d.severity,
+    severity_tier_adjusted: d.severity,
+    confidence: 0.7,
+    finding_type: d.finding_type,
+    title: DATA_POSTURE_TITLE[d.finding_type],
+    description: `${d.detail} ${d.remediation}`,
+    file: d.file,
+    line: d.line,
+    tier,
+    fix_class: d.fixClass,
     tool_of_record: "in-house",
     references: [],
   });

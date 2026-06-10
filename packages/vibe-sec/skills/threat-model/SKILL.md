@@ -16,7 +16,7 @@ the tier→ASVS table, and the safety line.
 
 `/vibe-sec:threat-model` is the synthesis sink node — pure synthesis, no
 detection. It runs last, never parallelized, consuming the tier classification +
-all ten other concerns' findings + Vibe Test covered-surfaces. It does not
+all eleven other concerns' findings + Vibe Test covered-surfaces. It does not
 re-scan; it reads what the detectors already produced.
 
 ## The flow

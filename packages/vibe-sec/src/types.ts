@@ -17,9 +17,13 @@ export type AsvsLevel = "none" | "ASVS-L1" | "ASVS-L2" | "ASVS-L3" | "ASVS-L3+SS
 export type Severity = "critical" | "high" | "medium" | "low";
 
 /**
- * The eleven concerns. `primary_concern` is exactly one of these (spec §6).
+ * The twelve concerns. `primary_concern` is exactly one of these (spec §6).
  * #11 license-compliance landed via GAP-26 (the GPL-engine-in-a-commercial-app
  * incident) — static license posture of the installed dependency tree.
+ * #12 data-posture landed via GAP-09 (static half) — migration discipline +
+ * backup posture for apps that persist user data. Applicability-gated: no
+ * persistence → not-applicable, out of the score denominator. The runtime
+ * half (live document sampling, restore verification) belongs to vibe-ops.
  */
 export type Concern =
   | "dependency-cve"
@@ -32,7 +36,8 @@ export type Concern =
   | "auth-model"
   | "threat-model"
   | "tier-thresholds"
-  | "license-compliance";
+  | "license-compliance"
+  | "data-posture";
 
 /** Per-tier per-concern scope. `skip` excludes a concern from the score denominator. */
 export type ConcernScope = "skip" | "lightweight" | "full" | "mandatory";
@@ -72,6 +77,7 @@ export const ALL_CONCERNS: readonly Concern[] = [
   "threat-model",
   "tier-thresholds",
   "license-compliance",
+  "data-posture",
 ] as const;
 
 export const SEVERITY_ORDER: Record<Severity, number> = {

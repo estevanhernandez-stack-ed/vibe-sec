@@ -4,7 +4,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { type Severity, type Tier } from "../types.js";
+import { type Concern, type Severity, type Tier } from "../types.js";
 import { auditStatePath } from "./paths.js";
 
 export interface AuditState {
@@ -21,6 +21,14 @@ export interface AuditState {
   findings_total: number;
   /** Tools that produced findings this run — for report crediting. */
   tools_used: string[];
+  /**
+   * Concerns whose applicability gate reported NOT APPLICABLE this run (GAP-09
+   * — e.g. data-posture on an app with no persistence layer). Optional +
+   * additive: absent on pre-0.9 records. The gate drops these from the score
+   * denominator on cached runs — not-applicable is "nothing to evaluate," never
+   * a hollow 1.0 pass.
+   */
+  not_applicable_concerns?: Concern[];
 }
 
 const FRESH_WINDOW_MS = 24 * 60 * 60 * 1000;

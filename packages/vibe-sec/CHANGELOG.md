@@ -3,6 +3,18 @@
 Plugin releases. The CLI has its own changelog at `../vibe-sec-cli/CHANGELOG.md`.
 Tag convention: `vibe-sec-vX.Y.Z`.
 
+## [0.9.0] — 2026-06-09 — data-posture: concern #12 (GAP-09, static half)
+
+The migration class nothing audited: Celestia3's PersistenceService lazily migrates real user data on read, 626Labs-1 runs an in-flight Firestore→Data-Connect migration — both hand-rolled, neither checked by anything. From the quality-net gap analysis, GAP-09; the runtime half (does a restore actually work, live shape correspondence) is explicitly reserved for vibe-ops.
+
+- **feat(data-posture):** new detector family `src/detectors/data-posture/` — persistence applicability gate (dep table + file hints, with a firebase disambiguation: the SDK alone isn't persistence until rules files or firestore imports corroborate), backup-posture check across five discoverable surfaces (scripts, CI, script files, export-shaped scheduled functions, restore runbooks), and the migration-discipline lint (machinery, schema-version stamps, write-stamps, backfill/completion paths, gating, lazy-read co-location).
+- **Conservative by design:** `lazy-migration-without-backfill` (MEDIUM) only fires when NO completion path exists anywhere — 626Labs-1's six lazy-shaped sites stay quiet because `migrateUserData()` exists. Backup *presence* is a score-neutral note, not a finding; the honesty cap ("config ≠ verified restore") rides the notes.
+- **Not-applicable is a third state:** `audit.json` gains optional `not_applicable_concerns[]`; the gate drops those concerns from the denominator. No persistence ≠ a hollow pass.
+- **Ground-truthed on the named patients:** Celestia3 → backup MEDIUM + no-schema-versioning LOW + lazy-without-backfill MEDIUM citing `PersistenceService.ts:58` **plus two real lazy migrations the spec didn't know about** (`GrimoireService.ts:54`, `UserProfileService.ts:85`, both hand-verified); 626Labs-1 → `migrationService.ts:33` completion path found verbatim, lazy finding correctly suppressed.
+- Scope grid: prototype/internal skip, public-facing lightweight, customer-facing-saas/regulated full.
+
+486 tests green (436 + 50 new). The audit is twelve concerns now.
+
 ## [0.8.0] — 2026-06-09 — license-compliance: concern #11 (GAP-26)
 
 The Celestia3 GPL engine forced the question: a commercial app distributing an Android binary shipped a GPL-3.0 core dependency and nothing in the net asked. From the quality-net gap analysis (vibe-plugins `docs/quality-net-gap-analysis-2026-06-09.md`, GAP-26).

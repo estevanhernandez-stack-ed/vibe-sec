@@ -302,6 +302,30 @@ export {
   type DistributionModelResult,
 } from "./detectors/license/index.js";
 
+// Data posture (#12, GAP-09 static half) — persistence applicability gate,
+// backup-posture sweep, migration-discipline lint. The runtime half (live
+// document sampling, restore verification) belongs to vibe-ops.
+export {
+  scanDataPosture,
+  dataPostureNotApplicableNote,
+  detectPersistence,
+  detectBackupPosture,
+  scanMigrationDiscipline,
+  type DataPostureScanResult,
+  type DataPostureScanOptions,
+  type DataPostureFinding,
+  type DataPostureFindingType,
+  type DataPostureCheck,
+  type PersistenceDetectionResult,
+  type PersistenceKind,
+  type BackupPostureResult,
+  type BackupSignal,
+  type BackupSignalKind,
+  type MigrationScanResult,
+  type MigrationSite,
+  type MigrationSiteKind,
+} from "./detectors/data-posture/index.js";
+
 // Shared source-tree walker for the structural detectors (Phase 3).
 export {
   walkSource,
@@ -342,6 +366,7 @@ export {
   abuseMonitoringToFinding,
   licenseToFinding,
   licenseNotScannedToFinding,
+  dataPostureToFinding,
 } from "./detectors/to-findings.js";
 
 // Report layer (3.5) — four-band structure + banner + markdown renderers.
