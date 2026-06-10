@@ -53,7 +53,7 @@ agree on classification unless a security-specific signal promotes it.
 ## Command surface (mention only what's relevant)
 
 - `/vibe-sec:scan` — fast secret scan (gitleaks deferral, in-house fallback)
-- `/vibe-sec:audit` — full ten-concern tier-calibrated audit
+- `/vibe-sec:audit` — full eleven-concern tier-calibrated audit
 - `/vibe-sec:deps` — fast dependency CVE + supply-chain subset
 - `/vibe-sec:gate` — CI pass/fail vs tier
 - `/vibe-sec:posture` — read-only cached summary

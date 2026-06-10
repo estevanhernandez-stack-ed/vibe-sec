@@ -113,6 +113,18 @@ export const SCOPE_GRID: Record<Concern, Record<Tier, ConcernScope>> = {
     "customer-facing-saas": "skip",
     regulated: "skip",
   },
+  "license-compliance": {
+    // GAP-26. Prototype/internal: out of scope entirely (out of the score
+    // denominator — license obligations attach to distribution, not tinkering).
+    // Public-facing runs it advisory-weight (lightweight); Customer-facing-SaaS
+    // and Regulated run it at full weight. Never gate-mandatory (see
+    // mandatoryConcerns) — remediation is a business decision, not a code fix.
+    prototype: "skip",
+    internal: "skip",
+    "public-facing": "lightweight",
+    "customer-facing-saas": "full",
+    regulated: "full",
+  },
 };
 
 /**
@@ -184,9 +196,15 @@ const MANDATORY_BY_TIER: Record<Tier, Concern[]> = {
 
 export function mandatoryConcerns(tier: Tier): Concern[] {
   if (tier === "regulated") {
-    // Every detector concern except the advisory threat-model + meta tier-thresholds.
+    // Every detector concern except the advisory threat-model, the meta
+    // tier-thresholds, and license-compliance (GAP-26: license findings route
+    // to business decisions — purchase / swap / open the source / document the
+    // position — so they weigh in the score but never hard-block the gate).
     return ALL_CONCERNS.filter(
-      (c) => c !== "threat-model" && c !== "tier-thresholds",
+      (c) =>
+        c !== "threat-model" &&
+        c !== "tier-thresholds" &&
+        c !== "license-compliance",
     );
   }
   return [...MANDATORY_BY_TIER[tier]];

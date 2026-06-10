@@ -1,7 +1,7 @@
 // Threat-model synthesis sink (concern #9; spec §4.9, synthesis §3.9; checklist 4.1).
 //
 // The sink node. Pure synthesis — runs LAST, never parallelized. It detects
-// nothing: it consumes the tier classification + all nine other concerns'
+// nothing: it consumes the tier classification + all ten other concerns'
 // findings + Vibe Test covered-surfaces, reconstructs a lightweight DFD, places
 // the three canonical trust boundaries, and walks STRIDE-per-element. DREAD
 // prioritizes; LINDDUN overlays at Customer-facing+; attack trees cover the

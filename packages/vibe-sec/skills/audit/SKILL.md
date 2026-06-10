@@ -1,7 +1,7 @@
 ---
 name: audit
 description: >
-  Full tier-calibrated security audit across all ten concerns. Use when the user
+  Full tier-calibrated security audit across all eleven concerns. Use when the user
   says "/vibe-sec:audit", "full security audit", "audit my app", "run a complete
   security check", "what security gaps do I have". Classifies the project tier,
   runs the in-scope concern detectors (deferring to external tools when present),
@@ -42,9 +42,24 @@ deterministic TypeScript detectors. Lead with the verdict, then the bands.
    record — defer to it when present (gitleaks, OSV-Scanner, Semgrep CE, …),
    fall back to the in-house baseline when absent, credit whichever ran.
 
-   The ten concerns: secrets, dependency-cve, supply-chain, config-posture,
-   crypto-pii, auth-model, owasp-survey, rate-limiting, tier-thresholds (the
-   math substrate, always on), threat-model. **Threat-model is the sink node:**
+   The eleven concerns: secrets, dependency-cve, supply-chain, config-posture,
+   crypto-pii, auth-model, owasp-survey, rate-limiting, license-compliance
+   (v0.8.0), tier-thresholds (the math substrate, always on), threat-model.
+
+   **license-compliance (v0.8.0, GAP-26).** Per detected package root, call
+   `scanLicenses(root)` then `evaluateLicensePolicy(...)` from
+   `src/detectors/license/`; map results through `licenseToFinding` /
+   `licenseNotScannedToFinding`. Severity keys to the distribution model the
+   detector infers (distributed-binary vs saas vs unknown) — strong copyleft
+   in a conveyed binary is the HIGH class; the dual-license OR-trap
+   (`BSD-3-Clause OR GPL-2.0`) is permissive and must not flag. Findings are
+   never gate-mandatory at any tier: remediation is a business decision
+   (license purchase / dependency swap / open the source / document the SaaS
+   position) — they weigh in the score per the grid, they don't hard-fail
+   `:gate`. When node_modules is absent, surface the not-scanned advisory;
+   never report clean on an uninventoried tree. Known soft spot to name in
+   the report when it applies: pnpm strict layouts under-inventory
+   transitives (top-level node_modules only). **Threat-model is the sink node:**
    consult `threatModelInAudit(tier)` before running it. At Prototype and
    Internal it returns false (Conflict 2 = C — opt-in only); NOT auto-included in
    `:audit`. Point the user at `/vibe-sec:threat-model` if they want it at

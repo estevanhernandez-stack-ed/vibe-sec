@@ -1,6 +1,6 @@
 {
   "name": "vibe-sec",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "Vibe Sec — the tier-aware security audit and orchestration layer for vibe-coded apps. Defers to gitleaks, OSV-Scanner, and Semgrep when present; falls back to an in-house baseline when absent; and owns the classification, severity calibration, four-band report, fix routing, and threat-model synthesis on top. Nine commands: vibe-sec, scan, audit, deps, fix, gate, posture, threat-model, research.",
   "author": {
     "name": "626Labs LLC",

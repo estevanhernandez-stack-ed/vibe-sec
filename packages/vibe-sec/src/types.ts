@@ -16,7 +16,11 @@ export type AsvsLevel = "none" | "ASVS-L1" | "ASVS-L2" | "ASVS-L3" | "ASVS-L3+SS
 /** Vibe-Sec-native 4-level severity. CVE findings carry CVSS passthrough separately. */
 export type Severity = "critical" | "high" | "medium" | "low";
 
-/** The ten concerns. `primary_concern` is exactly one of these (spec §6). */
+/**
+ * The eleven concerns. `primary_concern` is exactly one of these (spec §6).
+ * #11 license-compliance landed via GAP-26 (the GPL-engine-in-a-commercial-app
+ * incident) — static license posture of the installed dependency tree.
+ */
 export type Concern =
   | "dependency-cve"
   | "secret-detection"
@@ -27,7 +31,8 @@ export type Concern =
   | "rate-limiting"
   | "auth-model"
   | "threat-model"
-  | "tier-thresholds";
+  | "tier-thresholds"
+  | "license-compliance";
 
 /** Per-tier per-concern scope. `skip` excludes a concern from the score denominator. */
 export type ConcernScope = "skip" | "lightweight" | "full" | "mandatory";
@@ -66,6 +71,7 @@ export const ALL_CONCERNS: readonly Concern[] = [
   "auth-model",
   "threat-model",
   "tier-thresholds",
+  "license-compliance",
 ] as const;
 
 export const SEVERITY_ORDER: Record<Severity, number> = {

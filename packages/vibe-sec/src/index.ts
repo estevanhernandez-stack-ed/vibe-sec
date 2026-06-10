@@ -277,6 +277,31 @@ export {
   type DeployPlatform,
 } from "./detectors/rate-limiting/index.js";
 
+// License compliance (#11, GAP-26) — installed-tree inventory, SPDX classifier,
+// distribution-model detection, policy map keyed to conveyance.
+export {
+  scanLicenses,
+  evaluateLicensePolicy,
+  licenseCoverageAdvisory,
+  inventoryLicenses,
+  detectDistributionModel,
+  classifyLicenseId,
+  classifySpdxExpression,
+  classifyLicenseField,
+  type LicenseScanResult,
+  type LicenseScanOptions,
+  type LicensePolicyFinding,
+  type LicenseFindingType,
+  type LicenseBatchMember,
+  type LicenseCoverageAdvisory,
+  type LicenseClass,
+  type ClassifiedLicenseField,
+  type PackageLicenseRecord,
+  type LicenseInventoryResult,
+  type DistributionModel,
+  type DistributionModelResult,
+} from "./detectors/license/index.js";
+
 // Shared source-tree walker for the structural detectors (Phase 3).
 export {
   walkSource,
@@ -315,6 +340,8 @@ export {
   middlewareToFinding,
   rateLimitAbsentToFinding,
   abuseMonitoringToFinding,
+  licenseToFinding,
+  licenseNotScannedToFinding,
 } from "./detectors/to-findings.js";
 
 // Report layer (3.5) — four-band structure + banner + markdown renderers.

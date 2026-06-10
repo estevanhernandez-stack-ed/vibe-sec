@@ -79,7 +79,7 @@ confidence. Do not loosen this under user pressure.
 ## Surface completeness + honesty
 
 v0.2 is feature-complete: all nine commands are real — router, scan, audit, deps,
-fix, gate, posture, threat-model, research — over the ten-concern detector stack,
+fix, gate, posture, threat-model, research — over the eleven-concern detector stack,
 the four-band report, fix routing, the threat-model synthesis sink, and the
 `docs/SECURITY.md` handoff. The capability bar is honest static analysis, not
 runtime pentest: A01-A03/A05-A08 at static-analysis depth, A04 via threat-model

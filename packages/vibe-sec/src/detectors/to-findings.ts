@@ -39,6 +39,11 @@ import { dualTag } from "./owasp-survey/dual-tag.js";
 import type { LlmEndpointFinding } from "./rate-limiting/llm-endpoint.js";
 import type { MiddlewareFinding } from "./rate-limiting/middleware.js";
 import type { AbuseMonitoringFinding } from "./rate-limiting/abuse-monitoring.js";
+import type {
+  LicensePolicyFinding,
+  LicenseCoverageAdvisory,
+  LicenseFindingType,
+} from "./license/index.js";
 
 const PUBLIC_FACING_TIERS = new Set<Tier>([
   "public-facing",
@@ -710,6 +715,73 @@ export function rateLimitAbsentToFinding(tier: Tier): Finding | null {
     owasp_2021: "A04",
     owasp_2025: "A04",
     references: ["OWASP-A04-2021", "OWASP-A09-2021"],
+  });
+}
+
+// ─── license-compliance → findings (concern #11, GAP-26) ─────────────────
+// License findings carry no OWASP tag (compliance, not a weakness category);
+// supply-chain rides as the secondary concern since the exposure lives in the
+// dependency tree. Severity comes from the policy map (class × distribution
+// model × prod/dev) — tier governs scope via the SCOPE_GRID, not severity.
+
+const LICENSE_TITLE: Record<LicenseFindingType, string> = {
+  "strong-copyleft-in-distributed-binary": "GPL-class license in a distributed binary",
+  "network-copyleft-dependency": "AGPL-class license on a user-reachable dependency",
+  "strong-copyleft-server-side": "GPL-class license server-side (no conveyance)",
+  "strong-copyleft-unknown-distribution": "GPL-class license — distribution model unconfirmed",
+  "weak-copyleft-dependencies": "Weak-copyleft dependencies (LGPL/MPL/EPL class)",
+  "license-missing-or-unverifiable": "Missing or unverifiable dependency licenses",
+  "dev-dependency-copyleft": "Copyleft devDependencies (build-time only)",
+};
+
+export function licenseToFinding(l: LicensePolicyFinding, tier: Tier): Finding {
+  const isBatch = l.members !== null;
+  const subject = l.package ? `: ${l.package}@${l.version}` : ` (${l.members?.length ?? 0} packages)`;
+  return makeFinding({
+    id: nextId("license"),
+    primary_concern: "license-compliance",
+    secondary_concerns: ["supply-chain"],
+    severity_base: l.severity,
+    severity_tier_adjusted: l.severity,
+    // Per-package findings read the license field directly but trust the
+    // distribution-model heuristic; batches are mechanical field reads.
+    confidence: isBatch ? 1 : 0.9,
+    finding_type: l.finding_type,
+    surface: l.package ? `${l.package}@${l.version}` : null,
+    title: `${LICENSE_TITLE[l.finding_type]}${subject}`,
+    description: `${l.detail} ${l.remediation}`,
+    file: l.package ? `node_modules/${l.package}/package.json` : "package.json",
+    line: null,
+    tier,
+    fix_class: l.fixClass,
+    tool_of_record: "in-house",
+    references: l.licenseExpression ? [`SPDX:${l.licenseExpression}`] : [],
+  });
+}
+
+// ─── license coverage advisory → finding ─────────────────────────────────
+// node_modules absent: the scan couldn't look. Mirror of depNotCheckedToFinding
+// so a license-clean report never silently means "nothing was installed."
+export function licenseNotScannedToFinding(
+  advisory: LicenseCoverageAdvisory,
+  tier: Tier,
+): Finding {
+  return makeFinding({
+    id: nextId("license"),
+    primary_concern: "license-compliance",
+    secondary_concerns: ["supply-chain"],
+    severity_base: "low",
+    severity_tier_adjusted: "low",
+    confidence: 1,
+    finding_type: advisory.finding_type,
+    title: "License scan not performed (node_modules absent)",
+    description: advisory.detail,
+    file: null,
+    line: null,
+    tier,
+    fix_class: "inform-only",
+    tool_of_record: "in-house",
+    references: [],
   });
 }
 

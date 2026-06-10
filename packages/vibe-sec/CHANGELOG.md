@@ -3,6 +3,17 @@
 Plugin releases. The CLI has its own changelog at `../vibe-sec-cli/CHANGELOG.md`.
 Tag convention: `vibe-sec-vX.Y.Z`.
 
+## [0.8.0] — 2026-06-09 — license-compliance: concern #11 (GAP-26)
+
+The Celestia3 GPL engine forced the question: a commercial app distributing an Android binary shipped a GPL-3.0 core dependency and nothing in the net asked. From the quality-net gap analysis (vibe-plugins `docs/quality-net-gap-analysis-2026-06-09.md`, GAP-26).
+
+- **feat(license):** new detector family `src/detectors/license/` — SPDX expression parser (correct precedence, `WITH` exceptions, legacy `licenses` arrays; the dual-license OR-trap `(BSD-3-Clause OR GPL-2.0)` classifies permissive and must not flag), node_modules inventory (scoped packages, lockfile dev-flags, absent-tree advisory instead of false-clean), distribution-model detection (distributed-binary / saas / unknown), and the policy matrix keyed to it: strong copyleft in a conveyed binary is HIGH; AGPL user-reachable is HIGH; server-side GPL in SaaS is a MEDIUM document-your-position advisory; weak copyleft and missing-license batch LOW (don't cry wolf); devDependencies cap at INFO.
+- **Scope grid:** prototype/internal skip, public-facing lightweight, customer-facing-saas/regulated full. **License findings are never gate-mandatory at any tier** — remediation is a business decision (purchase / swap / open / document); they weigh in the score, they don't hard-fail `:gate`.
+- **Ground-truthed on real installed trees, not fixtures:** Celestia3 (1,370 packages, distributed-binary via Capacitor) → `swisseph-wasm@0.0.2 [GPL-3.0-or-later]` HIGH, the finding that motivated the concern; Project-626Labs-1 (1,533 packages, saas) → `node-forge [(BSD-3-Clause OR GPL-2.0)]` correctly NOT flagged.
+- Known soft spot (named in the audit SKILL): pnpm strict layouts under-inventory transitives (top-level node_modules only) — v0.8.x widening. NuGet/.nuspec (the Sanduhr leg) is explicitly out of v1 scope.
+
+436 tests green (352 + 84 new). The audit is eleven concerns now.
+
 ## [0.7.1] — 2026-06-09 — handshake repair: read what Vibe Test actually emits
 
 GAP-07 of the quality-net gap analysis (vibe-plugins docs/quality-net-gap-analysis-2026-06-09.md). The Vibe Test handshake was false-green by construction: the reader consumed a shape (`classification.tier`, `covered_surfaces.endpoints_*`, `detected_stack`) that Vibe Test's published schema forbids (`additionalProperties: false`) and never emitted. A real artifact parsed, passed freshness, reported `ok` — and extracted zero data, silently, since the day both shipped.
