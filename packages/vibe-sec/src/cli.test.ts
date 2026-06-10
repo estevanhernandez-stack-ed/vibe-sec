@@ -29,13 +29,35 @@ function silentIo(): CliIo {
   return { stdout: () => {}, stderr: () => {}, isTty: false };
 }
 
-// Resolve the legacy CLI path so we can compare exit codes against it.
+// Resolve the standalone CLI's built entry so we can compare exit codes
+// against it. The pre-0.7.0 pure-JS CLI (src/index.js) was replaced by the
+// tier-aware TS CLI in d69d7cb; this path went stale with it and the parity
+// suite sat red from the v0.7.0 tag until the v0.7.1 repair (GAP-04 class:
+// no pre-tag gate caught it). Parity now runs against the sibling's build,
+// and skips loudly when the sibling isn't built rather than failing on a
+// fresh clone.
 const here = path.dirname(fileURLToPath(import.meta.url));
-const legacyCli = path.resolve(here, "..", "..", "vibe-sec-cli", "src", "index.js");
+const standaloneCli = path.resolve(here, "..", "..", "vibe-sec-cli", "dist", "cli.js");
+const standaloneBuilt = fs.existsSync(standaloneCli);
 
-function legacyExit(args: string[]): number {
+// Spawn with PATH stripped to node's own directory so the standalone CLI
+// cannot find gitleaks/trufflehog and deterministically takes the in-house
+// Layer A path — mirroring the `inHouse` probe forced on the re-export side.
+function strippedPathEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (k.toUpperCase() !== "PATH") env[k] = v;
+  }
+  env["PATH"] = path.dirname(process.execPath);
+  return env;
+}
+
+function standaloneExit(args: string[]): number {
   try {
-    execFileSync("node", [legacyCli, ...args], { stdio: "ignore" });
+    execFileSync(process.execPath, [standaloneCli, ...args], {
+      stdio: "ignore",
+      env: strippedPathEnv(),
+    });
     return 0;
   } catch (ex) {
     return (ex as { status?: number }).status ?? -1;
@@ -81,39 +103,39 @@ describe("CLI exit-code contract", () => {
   });
 });
 
-describe("exit-code parity with the legacy CLI", () => {
-  it("clean tree: legacy 0 === re-export 0", () => {
+describe.skipIf(!standaloneBuilt)("exit-code parity with the standalone CLI", () => {
+  it("clean tree: standalone 0 === re-export 0", () => {
     fs.writeFileSync(path.join(tmp, "hello.ts"), "export const x = 1;\n");
-    const legacy = legacyExit(["--root", tmp, "--output", path.join(tmp, "legacy.json")]);
+    const standalone = standaloneExit(["--root", tmp, "--output", path.join(tmp, "standalone.json")]);
     const reexport = runCli(
       ["node", "cli", "--root", tmp, "--output", path.join(tmp, "re.json")],
       silentIo(),
       inHouse,
     );
-    expect(legacy).toBe(0);
-    expect(reexport).toBe(legacy);
+    expect(standalone).toBe(0);
+    expect(reexport).toBe(standalone);
   });
 
-  it("AWS leak: legacy 1 === re-export 1", () => {
+  it("AWS leak: standalone 1 === re-export 1", () => {
     fs.writeFileSync(path.join(tmp, "config.js"), `const k = "${AWS}";`);
-    const legacy = legacyExit(["--root", tmp, "--output", path.join(tmp, "legacy.json")]);
+    const standalone = standaloneExit(["--root", tmp, "--output", path.join(tmp, "standalone.json")]);
     const reexport = runCli(
       ["node", "cli", "--root", tmp, "--output", path.join(tmp, "re.json")],
       silentIo(),
       inHouse,
     );
-    expect(legacy).toBe(1);
-    expect(reexport).toBe(legacy);
+    expect(standalone).toBe(1);
+    expect(reexport).toBe(standalone);
   });
 
-  it("invalid arg: legacy 2 === re-export 2", () => {
-    const legacy = legacyExit(["--min-severity", "bananas", "--root", tmp]);
+  it("invalid arg: standalone 2 === re-export 2", () => {
+    const standalone = standaloneExit(["--min-severity", "bananas", "--root", tmp]);
     const reexport = runCli(
       ["node", "cli", "--root", tmp, "--min-severity", "bananas"],
       silentIo(),
       inHouse,
     );
-    expect(legacy).toBe(2);
-    expect(reexport).toBe(legacy);
+    expect(standalone).toBe(2);
+    expect(reexport).toBe(standalone);
   });
 });

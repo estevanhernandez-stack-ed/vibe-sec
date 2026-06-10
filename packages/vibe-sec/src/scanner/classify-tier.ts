@@ -1,9 +1,14 @@
 // Tier classifier (spec §2.3, synthesis §Detection; research:
 // security-tier-thresholds.md). Inherit-first, scan-second.
 //
-//   1. If Vibe Test's covered-surfaces.json is present + fresh (≤24h), inherit
-//      classification.tier + modifiers, then allow a security-specific
-//      PROMOTION (explicit, logged via tier_drift_note).
+//   1. If a fresh handshake supplies a tier, inherit it, then allow a
+//      security-specific PROMOTION (explicit, logged via tier_drift_note).
+//      REALITY CHECK (GAP-07, 2026-06-09): Vibe Test's artifact schema v1
+//      carries NO classification block, so inheritedTier is always null
+//      today — every run takes the self-scan path, and the audit banner
+//      says so. The inherit path below stays live so it activates
+//      unmodified when the core-owned v2 contract adds a tier
+//      (vibe-plugins docs/spec-bank/plugin-core-phase2.md).
 //   2. Otherwise self-scan the repo signals and fuse them into a tier.
 //
 // This file owns the signal-fusion math. The Vibe Test read lives in

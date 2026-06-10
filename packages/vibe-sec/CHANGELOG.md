@@ -3,6 +3,16 @@
 Plugin releases. The CLI has its own changelog at `../vibe-sec-cli/CHANGELOG.md`.
 Tag convention: `vibe-sec-vX.Y.Z`.
 
+## [0.7.1] — 2026-06-09 — handshake repair: read what Vibe Test actually emits
+
+GAP-07 of the quality-net gap analysis (vibe-plugins docs/quality-net-gap-analysis-2026-06-09.md). The Vibe Test handshake was false-green by construction: the reader consumed a shape (`classification.tier`, `covered_surfaces.endpoints_*`, `detected_stack`) that Vibe Test's published schema forbids (`additionalProperties: false`) and never emitted. A real artifact parsed, passed freshness, reported `ok` — and extracted zero data, silently, since the day both shipped.
+
+- **fix(composition):** the reader now consumes artifact schema v1 verbatim (`surfaces[]` + `coverage_level`): routes at `none` elevate admin/IDOR scanning, behavioral/edge routes de-prioritize re-audit. `schema_version !== 1` (including the old imaginary shape) degrades loudly as `unsupported-schema` — a regression tripwire test pins this.
+- **honesty:** artifact v1 carries no tier/modifiers/stack — `inheritedTier` is structurally null today; the classifier always self-scans and says so. Inheritance re-activates when the core-owned v2 contract adds a classification block (spec-bank: plugin-core-phase2).
+- **feat(composition):** `handshakeStatusLine()` — the one-line ok/degraded status the audit banner must always print. Silent fallback is now a documented defect, in code and in the `:audit` SKILL.
+- **tests:** composition suite rewritten against a fixture hand-synced to Vibe Test v0.2.5's real emitter output.
+- **fix(tests):** the CLI exit-code parity suite had been red since the v0.7.0 tag — it still spawned the pre-0.7.0 `vibe-sec-cli/src/index.js`, deleted in the d69d7cb restructure (no pre-tag gate caught it; GAP-04's case in miniature). It now targets the standalone CLI's build, strips PATH in the spawned env so the comparison is deterministically in-house (no gitleaks variance), and skips loudly when the sibling isn't built. 352 tests green.
+
 ## [0.7.0] — 2026-06-09 — vibe-sec-cli full tier-aware audit
 
 - **feat(cli):** `vibe-sec-cli` ships the full tier-aware audit — the standalone CLI now runs the complete ten-concern, tier-calibrated audit surface outside a Claude Code session.

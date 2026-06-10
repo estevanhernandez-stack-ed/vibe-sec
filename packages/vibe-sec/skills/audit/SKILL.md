@@ -19,12 +19,22 @@ deterministic TypeScript detectors. Lead with the verdict, then the bands.
 
 ## The flow
 
-1. **Classify the tier (inherit-or-scan).** Read the Vibe Test handshake
-   (`.vibe-test/state/covered-surfaces.json`) — if present and fresh (≤24h),
-   inherit `classification.tier` + `modifiers[]`. A security signal that
-   promotes above the inherited tier emits a `tier_drift_note` (name it to the
-   user). Absent or stale → self-classify via the repo signals. Never fail;
-   degrade gracefully.
+1. **Classify the tier (handshake-aware scan).** Read the Vibe Test handshake
+   (`.vibe-test/state/covered-surfaces.json`, artifact schema v1 — Vibe Test
+   owns the schema). **Always print the handshake status line in the banner,
+   ok or degraded — `handshakeStatusLine()` from `composition/vibe-test.ts`
+   renders it.** A missing handshake line in audit output is a bug, not a
+   style choice; silent fallback is the defect GAP-07 existed to kill.
+   - Fresh + schema v1: coverage data is the live signal — routes with
+     `coverage_level: "none"` ELEVATE admin-endpoint + IDOR scanning;
+     behavioral/edge-tested routes de-prioritize re-audit. Artifact v1
+     carries no tier, so the tier is **always self-classified today** — say
+     so in the banner. (Tier inheritance activates with the core-owned v2
+     contract; a security signal promoting above an inherited tier will emit
+     a `tier_drift_note`.)
+   - Absent / stale / corrupt / unsupported-schema: self-classify via the
+     repo signals and print the degraded line with the reason. Never fail;
+     degrade loudly.
 
 2. **Run every in-scope concern detector for the tier.** The scope grid is the
    gate: `skip` concerns are excluded from the score denominator entirely (tier
