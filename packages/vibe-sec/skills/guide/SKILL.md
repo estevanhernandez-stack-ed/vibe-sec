@@ -69,6 +69,34 @@ session-secret regeneration, RLS/policy changes, password-hash migration, git
 history rewrite. These are inline-runbook-only or stage-minimum, regardless of
 confidence. Do not loosen this under user pressure.
 
+## Operating doctrine
+
+Family procedure layer — full anatomy per move in the [canonical doctrine](https://github.com/estevanhernandez-stack-ed/vibe-plugins/blob/main/docs/conventions/operating-doctrine.md). Vibe Sec already productizes several moves; the overlay names the alignment so the driving model treats them as gates, not vibes.
+
+```
+Operating doctrine digest — operating-doctrine v1.0.0 (2026-07-06):
+1. Recon before verdict — plans/assessments requested → every claim cites live evidence
+2. Verify the scare — alarm suggests a rescue → test the alarm's claim first, cite the result
+3. Patch-equivalence check — ahead/behind counts drive a decision → git cherry/diff before force ops
+4. Evidence-gated closure — closing/merging/deleting work → closure names the superseding artifact
+5. Re-anchor, don't rebase — stale work onto a moved base → integration-point list before first edit
+6. Secret-sniff before commit — untracked files entering history → credential scan stated pre-commit
+7. Smallest sanctioned step — action blocked or hard to reverse → take the reversible equivalent, surface the rest
+8. Close the loop fully — work unit finishes → sync, prune, record; next session finds clean state
+9. Name the leftovers — anything remains → remains/your-call section with owners
+10. Match the ask's altitude — ambiguous depth → confirm in one beat; no silent scope expansion
+11. Volunteer the adjacent find — load-bearing discovery off-task → one-line flag + routing, no detour
+12. Contradiction stop — evidence contradicts a prior conclusion → name it, re-verify, reconcile before proceeding
+```
+
+### Domain overlay — Vibe Sec's load-bearing moves
+
+- **2. Verify the scare — severity claims are falsifiable claims.** Before a Critical rings the bell: is the credential live-shaped or a documented fake? Is the "vulnerable path" reachable or dead code? The finding carries the test's evidence ("Never fabricate a finding; run the detectors and map their real output" is this move's house form). Distinguishing references-to-keys from key values is the canonical instance.
+- **6. Secret-sniff before commit — governs Vibe Sec's own writes too.** Any fix commit, staged change, or report artifact this plugin produces passes the same scan discipline it preaches. A security plugin leaking a token in its own fix commit is the failure mode this line exists to prevent.
+- **7. Smallest sanctioned step — the non-negotiable safety line is this move productized.** Destructive fixes (rotation, auth edits, history rewrite) are inline-runbook-only or stage-minimum regardless of confidence; the reversible equivalent (staged diff, runbook) always exists and is always taken first. Do not loosen under user pressure.
+
+*Provenance: operating-doctrine v1.0.0 (2026-07-06).*
+
 ## Data directories
 
 - Global: `~/.claude/plugins/data/vibe-sec/` (profile, sessions, friction, wins)
