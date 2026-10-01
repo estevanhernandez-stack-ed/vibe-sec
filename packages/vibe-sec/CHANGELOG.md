@@ -3,6 +3,18 @@
 Plugin releases. The CLI has its own changelog at `../vibe-sec-cli/CHANGELOG.md`.
 Tag convention: `vibe-sec-vX.Y.Z`.
 
+## [Unreleased]
+
+- **docs(tiering):** `/research`'s domain-research dispatch carries `Dispatch tier: judgment`, and the guide gains the family model-tiering mapping note (vibe-plugins `docs/conventions/model-tiering-rfc.md`) plus a provenance rule: Claude Code can re-run cyber-flagged turns on a model other than the session's, so no vibe-sec artifact names the session model. From the Opus 5.5 board (2026-09-22, item 7) and the Sonnet 5.5 family plan.
+- **feat(brand):** vibe-sec mark, vibe family icon pass (on main since 2026-07-09, unreleased).
+
+## [0.10.0] — 2026-07-06 — operating-doctrine stamp
+
+Backfilled 2026-10-01; the tag shipped without a changelog entry.
+
+- **feat(doctrine):** operating-doctrine v1.0.0 digest plus the Vibe Sec domain overlay (moves 2, 6 and 7) in the guide skill.
+- **ci:** tag-push release caller via the 6deux6 reusable cut-release workflow.
+
 ## [0.9.0] — 2026-06-09 — data-posture: concern #12 (GAP-09, static half)
 
 The migration class nothing audited: Celestia3's PersistenceService lazily migrates real user data on read, 626Labs-1 runs an in-flight Firestore→Data-Connect migration — both hand-rolled, neither checked by anything. From the quality-net gap analysis, GAP-09; the runtime half (does a restore actually work, live shape correspondence) is explicitly reserved for vibe-ops.

@@ -58,6 +58,12 @@ detector code; it refreshes the research a future build pass would read.
      reshuffles, ASVS version bumps),
    - new CVE/attack-pattern classes the detector should learn.
 
+   **Dispatch tier:** `judgment` — the domain-research agent synthesizes a living
+   brief from primary sources, and brief quality is load-bearing for every detector
+   downstream (the litmus review's finding). It is not volume work from a tight
+   spec, so it stays on the session model. The session owns the tier-to-model
+   mapping; this SKILL names tiers, never models.
+
 4. **Regenerate the brief.** Write the refreshed `docs/research/<brief>.md`
    in place, keeping the section structure and updating the "Authored" line to
    the re-run date. Preserve the sources list; add new ones.
