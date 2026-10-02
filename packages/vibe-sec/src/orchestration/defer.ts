@@ -17,6 +17,16 @@ import type { Severity } from "../types.js";
 /** Runs an external command and returns stdout, or throws on failure. */
 export type CommandRunner = (cmd: string, args: string[], cwd: string) => string;
 
+// Package-manager entry points are .cmd shims on Windows; execFileSync cannot
+// spawn a .cmd without a shell (EINVAL, Node >= 18.20 / 20.12). Real binaries
+// (gitleaks, trufflehog, semgrep, git) spawn directly on every platform.
+const SHELL_SHIMS_WIN32: ReadonlySet<string> = new Set(["npm", "npx", "pnpm", "yarn", "bun", "corepack"]);
+
+/** Spawn options that make `cmd` launchable on `platform` (default: this one). */
+export function spawnOptionsFor(cmd: string, platform: NodeJS.Platform = process.platform): { shell: boolean } {
+  return { shell: platform === "win32" && SHELL_SHIMS_WIN32.has(cmd.toLowerCase()) };
+}
+
 export const defaultCommandRunner: CommandRunner = (cmd, args, cwd) =>
   execFileSync(cmd, args, {
     cwd,
@@ -25,7 +35,35 @@ export const defaultCommandRunner: CommandRunner = (cmd, args, cwd) =>
     timeout: 120000,
     windowsHide: true,
     maxBuffer: 64 * 1024 * 1024,
+    ...spawnOptionsFor(cmd),
   });
+
+/**
+ * Run a tool whose "findings present" exit code is non-zero (gitleaks exits 1
+ * when it finds leaks, npm audit when it finds vulns) and still writes its
+ * report to stdout. The runner contract throws on non-zero; this recovers the
+ * stdout for the listed exit codes and rethrows everything else (ENOENT,
+ * timeouts, real crashes) so the caller's fallback still fires.
+ */
+export function runTolerant(
+  runner: CommandRunner,
+  cmd: string,
+  args: string[],
+  cwd: string,
+  findingsExitCodes: readonly number[] = [1],
+): string {
+  try {
+    return runner(cmd, args, cwd);
+  } catch (ex) {
+    const e = ex as { status?: number | null; stdout?: string | Buffer };
+    const stdout = e?.stdout;
+    const text = typeof stdout === "string" ? stdout : stdout ? stdout.toString("utf8") : "";
+    if (typeof e?.status === "number" && findingsExitCodes.includes(e.status) && text.trim()) {
+      return text;
+    }
+    throw ex;
+  }
+}
 
 export interface DeferResult {
   tool: ToolName;
@@ -135,10 +173,14 @@ export function deferToGitleaks(
   runner: CommandRunner = defaultCommandRunner,
 ): DeferResult {
   // Report to stdout so we don't litter the tree; -v keeps it quiet on stderr.
-  const out = runner(
+  // gitleaks exits 1 when it FINDS leaks — that is the success-with-findings
+  // case, not a failure (see runTolerant). Exit 0 = clean, anything else = crash.
+  const out = runTolerant(
+    runner,
     "gitleaks",
     ["detect", "--no-banner", "--report-format", "json", "--report-path", "-"],
     projectRoot,
+    [1],
   );
   return { tool: "gitleaks", findings: parseGitleaksJson(out) };
 }

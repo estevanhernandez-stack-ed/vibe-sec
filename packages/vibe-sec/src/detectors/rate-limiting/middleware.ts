@@ -43,6 +43,30 @@ const LIB_CALL_RE =
 const SHARED_STORE_RE = /\b(?:redis|upstash|RateLimiterRedis|new Redis|ioredis|MemcachedStore|store\s*:)\b/i;
 // Custom Redis-INCR rate limiting — detected, not verified.
 const CUSTOM_INCR_RE = /\b(?:redis|client)\s*\.\s*incr\s*\(/i;
+// Project-local guard helpers: an identifier that CONTAINS a rate-limit /
+// budget / throttle stem and is CALLED (`enforceRateLimit(`, `checkDailyBudget(`,
+// `throttleUser(`). LIB_CALL_RE anchors on a word boundary, so a repo's own
+// `enforceRateLimit` never matched and the whole project read as having no
+// limiter at all (WSYATM, 2026-10-02). A definition (`function enforceRateLimit(`)
+// is not a call site — the orchestrator needs to see the helper USED by a route.
+const LOCAL_GUARD_CALL_RE =
+  /(?<!function\s)(?<![.\w])(\w*(?:rateLimit|ratelimit|rate_limit|dailyBudget|daily_budget|throttle)\w*)\s*\(/gi;
+
+/** First call-site index of a project-local guard helper, or -1. */
+function findLocalGuardCall(text: string): number {
+  LOCAL_GUARD_CALL_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = LOCAL_GUARD_CALL_RE.exec(text)) !== null) {
+    const name = m[1] ?? "";
+    // `function enforceRateLimit(` / `async function enforceRateLimit(` define, not call.
+    const before = text.slice(Math.max(0, m.index - 24), m.index);
+    if (/\bfunction\s+$/.test(before)) continue;
+    // Bare library names are LIB_CALL_RE's job.
+    if (/^(?:rateLimit|rateLimiter|Ratelimit)$/.test(name)) continue;
+    return m.index;
+  }
+  return -1;
+}
 
 /**
  * Classify a rate-limiter call site found in a file. Returns the shape finding(s)
@@ -75,6 +99,21 @@ export function scanMiddleware(text: string, filePath: string): MiddlewareFindin
       detail:
         "A custom Redis-INCR rate-limit pattern is present. Detected, not verified — confirm it sets an expiry on the counter and handles the race between INCR and EXPIRE. A library (Upstash Ratelimit) handles these correctly.",
     });
+    return findings;
+  }
+
+  if (!hasLibCall) {
+    const idx = findLocalGuardCall(text);
+    if (idx >= 0) {
+      findings.push({
+        finding_type: "custom-rate-limit-detected-not-verified",
+        severity: "low",
+        file: filePath,
+        line: lineOf(text, idx),
+        detail:
+          "A project-local (in-house) rate-limit or budget guard is called here. Detected, not verified — confirm the counter lives in a shared store (not process memory), expires, and fails closed for the public tier. Verification is a human read of the helper, not a scan.",
+      });
+    }
   }
 
   return findings;

@@ -164,6 +164,86 @@ module.exports = { generateBadgeIcon };
   });
 });
 
+// ─── Regression: project-local guard helpers (WSYATM, 2026-10-02) ──────────
+// A repo with its own Firestore-backed `enforceRateLimit` / `enforceDailyBudget`
+// middleware was flagged four ways at once: every budgeted LLM handler as
+// "unbounded" (BUDGET_RE demanded a word boundary before `rateLimit`, so
+// `enforceRateLimit(` never matched) and the whole project as "no rate-limit
+// library" (only the npm package list and library-shaped call names counted).
+// Project-local guard helpers must count as a limiter call site and as a budget.
+describe("project-local guard helpers (regression)", () => {
+  const guardedFirebaseHandler = `
+const {onRequest} = require("firebase-functions/v2/https");
+const {GoogleGenerativeAI} = require("@google/generative-ai");
+const { geminiApiKey, verifyAuthToken } = require("../utils/helpers");
+const { enforceRateLimit, enforceDailyBudget } = require("../utils/middleware");
+
+const generateScoutReport = onRequest(
+    {cors: true, timeoutSeconds: 60},
+    async (req, res) => {
+      if (await enforceRateLimit(req, res, "strict", "generateScoutReport")) return;
+      const decodedToken = await verifyAuthToken(req);
+      const uid = decodedToken.uid;
+      if (await enforceDailyBudget(req, res, {name: "generateScoutReport", uid, globalCap: 200, perUserCap: 20})) return;
+      const genAI = new GoogleGenerativeAI(geminiApiKey.value());
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const result = await model.generateContent(prompt);
+      return res.json(result.response.text());
+    });
+
+module.exports = { generateScoutReport };
+`;
+
+  it("treats a project-local budget helper as a per-user budget (no LLM finding)", () => {
+    expect(scanLlmEndpoint(guardedFirebaseHandler, "functions/src/games/scoutReport.js")).toEqual([]);
+  });
+
+  it("treats a project-local rate-limit helper alone as bounded", () => {
+    const rateOnly = guardedFirebaseHandler.replace(/\n\s*if \(await enforceDailyBudget[^\n]*\n/, "\n");
+    expect(rateOnly).not.toMatch(/enforceDailyBudget\(/);
+    expect(scanLlmEndpoint(rateOnly, "functions/src/games/scoutReport.js")).toEqual([]);
+  });
+
+  it("still flags the same handler when neither helper is called", () => {
+    const unguarded = guardedFirebaseHandler
+      .replace(/\n\s*if \(await enforceRateLimit[^\n]*\n/, "\n")
+      .replace(/\n\s*if \(await enforceDailyBudget[^\n]*\n/, "\n");
+    const findings = scanLlmEndpoint(unguarded, "functions/src/games/scoutReport.js");
+    expect(findings.length).toBe(1);
+    expect(findings[0]!.finding_type).toBe("llm-endpoint-unbounded");
+  });
+
+  it("surfaces a project-local limiter call site as detected-not-verified, once per file", () => {
+    const findings = scanMiddleware(guardedFirebaseHandler, "functions/src/games/scoutReport.js");
+    const custom = findings.filter((f) => f.finding_type === "custom-rate-limit-detected-not-verified");
+    expect(custom.length).toBe(1);
+    expect(custom[0]!.detail).toMatch(/project-local|in-house/i);
+    expect(findings.some((f) => f.finding_type === "in-memory-rate-limit-store")).toBe(false);
+  });
+
+  it("does NOT count a helper's own definition as a call site", () => {
+    const definition = `
+async function enforceRateLimit(req, res, tierName, endpoint) {
+  const counter = db.collection("rateLimits").doc(key);
+  return false;
+}
+async function enforceDailyBudget(req, res, {name, uid, globalCap}) { return false; }
+module.exports = { enforceRateLimit, enforceDailyBudget };
+`;
+    expect(scanMiddleware(definition, "functions/src/utils/middleware.js")).toEqual([]);
+  });
+
+  it("orchestrator: a project with routes and a local guard helper is NOT library-absent", () => {
+    write("package.json", JSON.stringify({ dependencies: { "firebase-functions": "7.4.0", "firebase-admin": "14.5.0" } }));
+    write("functions/src/games/scoutReport.js", guardedFirebaseHandler);
+    const result = scanRateLimiting(tmp, { tier: "public-facing" });
+    expect(result.hasRoutes).toBe(true);
+    expect(result.libraryAbsent).toBe(false);
+    expect(result.llmEndpoints).toEqual([]);
+    expect(result.middleware.some((f) => f.finding_type === "custom-rate-limit-detected-not-verified")).toBe(true);
+  });
+});
+
 // ─── middleware inspection ─────────────────────────────────────────────────
 describe("middleware inspection", () => {
   it("flags an in-memory rate-limit store", () => {

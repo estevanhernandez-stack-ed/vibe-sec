@@ -63,8 +63,12 @@ const HANDLER_BOUNDARY_RE =
 const AUTH_RE =
   /\bauth\s*\(|\bgetServerSession\s*\(|\bgetUser\s*\(|\brequireAuth\b|\bcurrentUser\s*\(|\bsession\.user\b|\breq\.user\b|\bctx\.user\b|\bverifyToken\b|\bverifyAuthToken\b|\bverifyIdToken\b|\bcheckAdminRole\b|\bcheckManagerRole\b|\bverifyFirebaseToken\b|\bgetAuth\s*\(|\badmin\.auth\s*\(|\bgetToken\s*\(|\bauthHeader\b|\bauthorization\b|\bBearer\s/;
 // Per-user budget / rate-limit / token-cap markers.
+// Two shapes: known library / config markers (word-bounded), and a CALL to any
+// project-local helper whose name contains a rate-limit / budget / throttle stem
+// (`enforceRateLimit(`, `enforceDailyBudget(`). The leading \b on the first
+// shape is why `enforceRateLimit(` never matched (WSYATM, 2026-10-02).
 const BUDGET_RE =
-  /\b(?:rateLimit|ratelimit|@upstash\/ratelimit|arcjet|tokenBudget|max_tokens_per_user|perUserLimit|quota|creditsRemaining|usageLimit|max_tokens\s*:)\b/i;
+  /\b(?:rateLimit|ratelimit|@upstash\/ratelimit|arcjet|tokenBudget|max_tokens_per_user|perUserLimit|quota|creditsRemaining|usageLimit|max_tokens\s*:)\b|(?<![.\w])(?<!function\s)\w*(?:rateLimit|ratelimit|rate_limit|dailyBudget|daily_budget|budget|throttle)\w*\s*\(/i;
 
 /**
  * Given the full file text and the index of a model call, return the slice of
