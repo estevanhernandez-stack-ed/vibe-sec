@@ -97,6 +97,23 @@ describe("trufflehog JSONL adapter", () => {
   });
 });
 
+// Regression (WSYATM gate run, 2026-10-02): on Windows `npm`, `npx`, `pnpm` and
+// `yarn` are .cmd shims. execFileSync refuses to spawn a .cmd without a shell
+// (EINVAL since Node 18.20 / 20.12), so the dependency scan silently reported
+// "not performed". Real binaries (gitleaks.exe, git.exe) need no shell.
+describe("spawnOptionsFor (Windows shims)", () => {
+  it("uses a shell for npm-style shims on win32 only", async () => {
+    const { spawnOptionsFor } = await import("./defer.js");
+    expect(spawnOptionsFor("npm", "win32").shell).toBe(true);
+    expect(spawnOptionsFor("npx", "win32").shell).toBe(true);
+    expect(spawnOptionsFor("pnpm", "win32").shell).toBe(true);
+    expect(spawnOptionsFor("yarn", "win32").shell).toBe(true);
+    expect(spawnOptionsFor("gitleaks", "win32").shell).toBe(false);
+    expect(spawnOptionsFor("npm", "linux").shell).toBe(false);
+    expect(spawnOptionsFor("npm", "darwin").shell).toBe(false);
+  });
+});
+
 describe("scanSecrets orchestration", () => {
   it("takes the deferral path when gitleaks is present (mocked)", () => {
     writeAwsLeak();
@@ -126,6 +143,41 @@ describe("scanSecrets orchestration", () => {
     expect(result.deferred).toBe(false);
     expect(result.toolOfRecord).toBe("in-house");
     expect(result.findings.some((f) => f.pattern === "AWS_ACCESS_KEY_ID")).toBe(true);
+  });
+
+  // Regression (WSYATM gate run, 2026-10-02): gitleaks exits 1 when it FINDS
+  // leaks and still writes its JSON report to stdout. The default runner throws
+  // on any non-zero exit, so the deferral threw and the orchestrator fell back
+  // to Layer A, silently discarding every gitleaks result. Exit 1 with stdout
+  // is the success-with-findings case, not a failure.
+  it("keeps gitleaks results when it exits 1 with a JSON report on stdout", () => {
+    writeAwsLeak();
+    const exit1Runner: CommandRunner = (cmd) => {
+      expect(cmd).toBe("gitleaks");
+      const err = new Error("Command failed: gitleaks detect") as Error & { status: number; stdout: string };
+      err.status = 1;
+      err.stdout = JSON.stringify([
+        { RuleID: "aws-access-key", File: "config.js", StartLine: 1, StartColumn: 11, Secret: AWS, Match: `const k = "${AWS}"` },
+      ]);
+      throw err;
+    };
+    const result = scanSecrets(tmp, { probe: gitleaksPresent, runner: exit1Runner });
+    expect(result.deferred).toBe(true);
+    expect(result.toolOfRecord).toBe("gitleaks");
+    expect(result.findings).toHaveLength(1);
+  });
+
+  it("still falls back when the runner throws with a non-1 status or no stdout", () => {
+    writeAwsLeak();
+    const crashRunner: CommandRunner = () => {
+      const err = new Error("spawn gitleaks ENOENT") as Error & { status: number | null; stdout: string };
+      err.status = null;
+      err.stdout = "";
+      throw err;
+    };
+    const result = scanSecrets(tmp, { probe: gitleaksPresent, runner: crashRunner });
+    expect(result.deferred).toBe(false);
+    expect(result.toolOfRecord).toBe("in-house");
   });
 
   it("falls back to in-house when the deferral throws", () => {

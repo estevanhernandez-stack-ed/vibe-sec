@@ -8,6 +8,17 @@ Tag convention: `vibe-sec-vX.Y.Z`.
 - **docs(tiering):** `/research`'s domain-research dispatch carries `Dispatch tier: judgment`, and the guide gains the family model-tiering mapping note (vibe-plugins `docs/conventions/model-tiering-rfc.md`) plus a provenance rule: Claude Code can re-run cyber-flagged turns on a model other than the session's, so no vibe-sec artifact names the session model. From the Opus 5.5 board (2026-09-22, item 7) and the Sonnet 5.5 family plan.
 - **feat(brand):** vibe-sec mark, vibe family icon pass (on main since 2026-07-09, unreleased).
 
+## [0.10.1] — 2026-10-02 — rate-limiting: project-local guard helpers
+
+Found on the We See You at the Movies gate run (2026-10-02). A Firebase repo with its own Firestore-backed `enforceRateLimit` / `enforceDailyBudget` middleware failed the gate four ways at once, every one a false positive: three budgeted LLM handlers flagged `llm-endpoint-unbounded`, plus a project-level `no-rate-limit-library`. The budget regex demanded a word boundary before `rateLimit`, so `enforceRateLimit(` never matched; the library check only knew npm package names and library-shaped call names.
+
+- **fix(rate-limiting):** a CALL to any project-local helper whose name contains a rate-limit / budget / throttle stem (`enforceRateLimit(`, `enforceDailyBudget(`, `throttleUser(`) now counts as a per-user budget in the LLM-endpoint check and as a limiter call site in the middleware scan. It surfaces as `custom-rate-limit-detected-not-verified` (low, once per file) — detected, not verified, same contract as the Redis-INCR shape. A definition (`function enforceRateLimit(`) is not a call site.
+- **fix(defer):** gitleaks exits 1 when it FINDS leaks and still writes its JSON report to stdout. The default runner treated every non-zero exit as a crash, so the deferral threw, the orchestrator fell back to Layer A and every gitleaks result was silently dropped. `runTolerant` recovers stdout for the tool's findings exit code and rethrows everything else (ENOENT, timeouts).
+- **fix(defer, windows):** `npm` / `npx` / `pnpm` / `yarn` are `.cmd` shims on Windows and execFileSync refuses them without a shell (EINVAL since Node 18.20 / 20.12), so `npm audit` reported "not performed" on every Windows gate run. `spawnOptionsFor` adds `shell: true` for those shims on win32 only; real binaries spawn directly.
+- package.json version realigned to the plugin version (was 0.9.0 while the plugin shipped 0.10.0).
+
+495 tests green (486 + 9 new regression cases shaped on the WSYATM handlers).
+
 ## [0.10.0] — 2026-07-06 — operating-doctrine stamp
 
 Backfilled 2026-10-01; the tag shipped without a changelog entry.
